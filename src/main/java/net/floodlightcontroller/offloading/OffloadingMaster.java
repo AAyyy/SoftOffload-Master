@@ -1,7 +1,11 @@
 package net.floodlightcontroller.offloading;
 
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -26,10 +30,13 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 
 	// private IFloodlightProviderService floodlightProvider;
 	private ScheduledExecutorService executor;
+	private Socket agentSocket = null;
+	private PrintWriter outBuf;
 	
 	//	private final AgentManager agentManager;
 
 	// some defaults
+	private final int AGENT_PORT = 6777;
 	static private final int DEFAULT_PORT = 2819;
 	
 	public OffloadingMaster(){
@@ -43,8 +50,18 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
      */
 	void receivePing(final InetAddress agentAddr) {
 		log.info("Ping message from: " + agentAddr);
+		
+		try {
+			agentSocket = new Socket(agentAddr.getHostAddress(), AGENT_PORT);
+			outBuf = new PrintWriter(agentSocket.getOutputStream(), true);
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		outBuf.println("ack");
 	}
-	
 	
 	//********* from IFloodlightModule **********//
 

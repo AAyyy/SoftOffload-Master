@@ -48,8 +48,11 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
      * 
      * @param AgentAddr
      */
-	void receivePing(final InetAddress agentAddr) {
-		log.info("Ping message from: " + agentAddr);
+	void receiveClientInfo(final InetAddress agentAddr, 
+			final String clientEthAddr, final String clientIpAddr) {
+		
+		log.info("Client message from " + agentAddr + ": " + clientEthAddr + 
+			" - " + clientIpAddr);
 		
 		try {
 			agentSocket = new Socket(agentAddr.getHostAddress(), AGENT_PORT);

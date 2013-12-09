@@ -6,17 +6,17 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.concurrent.ExecutorService;
 
+// import net.floodlightcontroller.util.MACAddress;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-// import net.floodlightcontroller.util.MACAddress;
 
 class OffloadingProtocolServer implements Runnable {
 
 	protected static Logger log = LoggerFactory.getLogger(OffloadingProtocolServer.class);
 
 	// Message types
-	private final String MSG_PING = "ping";
+	private final String MSG_CLIENT_INFO = "client";
 
 	private final int SERVER_PORT;
 	
@@ -58,8 +58,9 @@ class OffloadingProtocolServer implements Runnable {
 	
 	/** Protocol handlers **/
 	
-	private void receivePing (final InetAddress AgentAddr) {
-		offloadingMaster.receivePing(AgentAddr);
+	private void receiveClientInfo(final InetAddress agentAddr, 
+			final String clientEthAddr, final String clientIpAddr) {
+		offloadingMaster.receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
 	}
 	
 	private class ConnectionHandler implements Runnable {
@@ -74,10 +75,14 @@ class OffloadingProtocolServer implements Runnable {
 			final String msg = new String(receivedPacket.getData()).trim().toLowerCase();
 			final String[] fields = msg.split(" ");
 			final String msg_type = fields[0];
-			final InetAddress AgentAddr = receivedPacket.getAddress();
+			final InetAddress agentAddr = receivedPacket.getAddress();
             
-            if (msg_type.equals(MSG_PING)) {
-            	receivePing(AgentAddr);
+            if (msg_type.equals(MSG_CLIENT_INFO)) {
+            	final String clientEthAddr = fields[1];
+            	final String clientIpAddr = fields[2];
+            	
+            	receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
+            	
             }
 		}
 	}

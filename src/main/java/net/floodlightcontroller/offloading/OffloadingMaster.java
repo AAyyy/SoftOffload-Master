@@ -2,9 +2,10 @@ package net.floodlightcontroller.offloading;
 
 
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.Socket;
+// import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,8 +31,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 
 	// private IFloodlightProviderService floodlightProvider;
 	private ScheduledExecutorService executor;
-	private Socket agentSocket = null;
-	private PrintWriter outBuf;
+	private DatagramSocket agentSocket = null;
 	
 	//	private final AgentManager agentManager;
 
@@ -51,19 +51,21 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 	void receiveClientInfo(final InetAddress agentAddr, 
 			final String clientEthAddr, final String clientIpAddr) {
 		
+		byte[] buf = new byte[128];
 		log.info("Client message from " + agentAddr + ": " + clientEthAddr + 
 			" - " + clientIpAddr);
 		
 		try {
-			agentSocket = new Socket(agentAddr.getHostAddress(), AGENT_PORT);
-			outBuf = new PrintWriter(agentSocket.getOutputStream(), true);
+			agentSocket = new DatagramSocket();
+			buf = "ack\n".getBytes();
+			DatagramPacket packet = new DatagramPacket(buf, buf.length, agentAddr, AGENT_PORT);
+			agentSocket.send(packet);
+			agentSocket.close();
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
-		outBuf.println("ack");
 	}
 	
 	//********* from IFloodlightModule **********//

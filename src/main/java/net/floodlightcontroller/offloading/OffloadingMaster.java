@@ -44,7 +44,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 	}
 	
 	/**
-     * Handle a ping from an agent. 
+     * Handle a ClientInfo message from an agent. 
      * 
      * @param AgentAddr
      */
@@ -67,6 +67,16 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+     * Handle a ClientInfo message from an agent. 
+     * 
+     * @param AgentAddr
+     */
+	void receiveAgentRate(final InetAddress agentAddr, final String rate) {
+		log.info("Agent rate message from " + agentAddr + ": " + rate);
+	}
+	
 	
 	//********* from IFloodlightModule **********//
 

@@ -17,6 +17,7 @@ class OffloadingProtocolServer implements Runnable {
 
 	// Message types
 	private final String MSG_CLIENT_INFO = "client";
+	private final String MSG_AGENT_RATE = "agentrate";
 
 	private final int SERVER_PORT;
 	
@@ -63,6 +64,11 @@ class OffloadingProtocolServer implements Runnable {
 		offloadingMaster.receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
 	}
 	
+	private void receiveAgentRate(final InetAddress agentAddr, 
+			final String rate) {
+		offloadingMaster.receiveAgentRate(agentAddr, rate);
+	}
+	
 	private class ConnectionHandler implements Runnable {
 		final DatagramPacket receivedPacket;
 		
@@ -83,7 +89,12 @@ class OffloadingProtocolServer implements Runnable {
             	
             	receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
             	
+            } else if (msg_type.equals(MSG_AGENT_RATE)) {
+            	final String agentRate = fields[1];
+
+            	receiveAgentRate(agentAddr, agentRate);
             }
+            
 		}
 	}
 

@@ -1,3 +1,20 @@
+/**
+*    Copyright 2013 University of Helsinki
+* 
+*    Licensed under the Apache License, Version 2.0 (the "License"); you may
+*    not use this file except in compliance with the License. You may obtain
+*    a copy of the License at
+*
+*         http://www.apache.org/licenses/LICENSE-2.0
+*
+*    Unless required by applicable law or agreed to in writing, software
+*    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+*    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+*    License for the specific language governing permissions and limitations
+*    under the License.
+**/
+
+
 package net.floodlightcontroller.offloading;
 
 
@@ -24,6 +41,13 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.offloading.OffloadingProtocolServer;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
+
+/**
+ * This is an implementation of sdn wireless controllers
+ * 
+ * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
+ * 
+ **/
 
 public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 	protected static Logger log = LoggerFactory.getLogger(OffloadingMaster.class);
@@ -75,6 +99,13 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
      */
 	void receiveAgentRate(final InetAddress agentAddr, final String rate) {
 		log.info("Agent rate message from " + agentAddr + ": " + rate);
+	}
+	
+	void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr, 
+			final String clientIpAddr, final String clientRate) {
+		
+		log.info("Client rate message from " + agentAddr + ": " + clientEthAddr 
+				+ " -- " + clientIpAddr + " -- " + clientRate);
 	}
 	
 	

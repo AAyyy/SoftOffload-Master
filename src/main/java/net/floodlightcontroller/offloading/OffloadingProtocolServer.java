@@ -1,3 +1,20 @@
+/**
+*    Copyright 2013 University of Helsinki
+* 
+*    Licensed under the Apache License, Version 2.0 (the "License"); you may
+*    not use this file except in compliance with the License. You may obtain
+*    a copy of the License at
+*
+*         http://www.apache.org/licenses/LICENSE-2.0
+*
+*    Unless required by applicable law or agreed to in writing, software
+*    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+*    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+*    License for the specific language governing permissions and limitations
+*    under the License.
+**/
+
+
 package net.floodlightcontroller.offloading;
 
 import java.io.IOException;
@@ -11,6 +28,13 @@ import java.util.concurrent.ExecutorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * This is an implementation of sdn wireless controllers
+ * 
+ * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
+ * 
+ **/
+
 class OffloadingProtocolServer implements Runnable {
 
 	protected static Logger log = LoggerFactory.getLogger(OffloadingProtocolServer.class);
@@ -18,6 +42,7 @@ class OffloadingProtocolServer implements Runnable {
 	// Message types
 	private final String MSG_CLIENT_INFO = "client";
 	private final String MSG_AGENT_RATE = "agentrate";
+	private final String MSG_CLIENT_RATE = "clientrate";
 
 	private final int SERVER_PORT;
 	
@@ -69,6 +94,13 @@ class OffloadingProtocolServer implements Runnable {
 		offloadingMaster.receiveAgentRate(agentAddr, rate);
 	}
 	
+	private void receiveClientRate(final InetAddress agentAddr, 
+			final String clientEthAddr, final String clientIpAddr, 
+			final String clientRate) {
+		offloadingMaster.receiveClientRate(agentAddr, clientEthAddr, 
+				clientIpAddr, clientRate);
+	}
+	
 	private class ConnectionHandler implements Runnable {
 		final DatagramPacket receivedPacket;
 		
@@ -93,6 +125,12 @@ class OffloadingProtocolServer implements Runnable {
             	final String agentRate = fields[1];
 
             	receiveAgentRate(agentAddr, agentRate);
+            } else if (msg_type.equals(MSG_CLIENT_RATE)) {
+            	final String clientEthAddr = fields[1];
+            	final String clientIpAddr = fields[2];
+            	final String clientRate = fields[3];
+
+            	receiveClientRate(agentAddr, clientEthAddr, clientIpAddr, clientRate);
             }
             
 		}

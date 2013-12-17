@@ -18,16 +18,13 @@
 package net.floodlightcontroller.offloading;
 
 
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
 // import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
@@ -42,6 +39,7 @@ import net.floodlightcontroller.offloading.OffloadingProtocolServer;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 
+
 /**
  * This is an implementation of sdn wireless controllers
  * 
@@ -55,16 +53,45 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 
 	// private IFloodlightProviderService floodlightProvider;
 	private ScheduledExecutorService executor;
-	private DatagramSocket agentSocket = null;
 	
 	//	private final AgentManager agentManager;
+	private Map<String, OffloadingAgent> agentMap
+		= new ConcurrentHashMap<String, OffloadingAgent> ();
+
 
 	// some defaults
-	private final int AGENT_PORT = 6777;
+	// private final int AGENT_PORT = 6777;
 	static private final int DEFAULT_PORT = 2819;
 	
 	public OffloadingMaster(){
 		// clientManager = new ClientManager();
+	}
+	
+	/**
+	 * Add an agent to the Master tracker
+	 * 
+	 * @param ipv4Address Client's IPv4 address
+	 */
+	public void addAgent(final InetAddress ipv4Address) {
+		String ipAddr = ipv4Address.getHostAddress();
+		
+		if (!agentMap.containsKey(ipAddr)) {
+			OffloadingAgent agent = new OffloadingAgent(ipv4Address);
+			agentMap.put(ipAddr, agent);
+		}
+	}
+	
+	/**
+	 * check whether an agent is in the hashmap
+	 * 
+	 * @param addr Agent's IPv4 address
+	 */
+	public boolean isAgentTracked(InetAddress addr) {
+		if (agentMap.containsKey(addr.getHostAddress())) {
+			return true;
+		}
+		
+		return false;
 	}
 	
 	/**
@@ -75,21 +102,14 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 	void receiveClientInfo(final InetAddress agentAddr, 
 			final String clientEthAddr, final String clientIpAddr) {
 		
-		byte[] buf = new byte[128];
 		log.info("Client message from " + agentAddr + ": " + clientEthAddr + 
 			" - " + clientIpAddr);
 		
-		try {
-			agentSocket = new DatagramSocket();
-			buf = "ack\n".getBytes();
-			DatagramPacket packet = new DatagramPacket(buf, buf.length, agentAddr, AGENT_PORT);
-			agentSocket.send(packet);
-			agentSocket.close();
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (!isAgentTracked(agentAddr)) {
+			addAgent(agentAddr);
 		}
+		
+		agentMap.get(agentAddr).receiveClientInfo(clientEthAddr, clientIpAddr);
 	}
 	
 	/**
@@ -99,6 +119,13 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
      */
 	void receiveAgentRate(final InetAddress agentAddr, final String rate) {
 		log.info("Agent rate message from " + agentAddr + ": " + rate);
+		
+		if (!isAgentTracked(agentAddr)) {
+			addAgent(agentAddr);
+		}
+		
+		float r = Float.parseFloat(rate);
+		agentMap.get(agentAddr).updateRate(r);
 	}
 	
 	void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr, 
@@ -106,6 +133,13 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 		
 		log.info("Client rate message from " + agentAddr + ": " + clientEthAddr 
 				+ " -- " + clientIpAddr + " -- " + clientRate);
+		
+		if (!isAgentTracked(agentAddr)) {
+			addAgent(agentAddr);
+		}
+		
+		float r = Float.parseFloat(clientRate);
+		agentMap.get(agentAddr).receiveClientRate(clientEthAddr, r);
 	}
 	
 	
@@ -150,7 +184,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
 			
 		// restApi.addRestletRoutable(new OdinMasterWebRoutable());
 		
-		// read config options
+		// read configure options
         Map<String, String> configOptions = context.getConfigParams(this);
         
         int port = DEFAULT_PORT;

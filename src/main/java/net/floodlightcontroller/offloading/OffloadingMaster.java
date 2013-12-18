@@ -101,8 +101,8 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
     void receiveClientInfo(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr) {
 
-        log.info("Client message from " + agentAddr + ": " + clientEthAddr +
-            " - " + clientIpAddr);
+        log.info("Client message from " + agentAddr.getHostAddress() + ": " +
+                clientEthAddr + " - " + clientIpAddr);
 
         if (!isAgentTracked(agentAddr)) {
             addAgent(agentAddr);
@@ -118,7 +118,8 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
      * @param AgentAddr
      */
     void receiveAgentRate(final InetAddress agentAddr, final String rate) {
-        log.info("Agent rate message from " + agentAddr + ": " + rate);
+        log.info("Agent rate message from " + agentAddr.getHostAddress() +
+                 ": " + rate);
 
         if (!isAgentTracked(agentAddr)) {
             addAgent(agentAddr);
@@ -131,8 +132,9 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
             final String clientIpAddr, final String clientRate) {
 
-        log.info("Client rate message from " + agentAddr + ": " + clientEthAddr
-                + " -- " + clientIpAddr + " -- " + clientRate);
+        log.info("Client rate message from " + agentAddr.getHostAddress() +
+                ": " + clientEthAddr + " -- " + clientIpAddr + " -- " +
+                clientRate);
 
         if (!isAgentTracked(agentAddr)) {
             addAgent(agentAddr);

@@ -27,15 +27,26 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 
+import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFMessage;
+import org.openflow.protocol.OFPacketIn;
+import org.openflow.protocol.OFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFMessageListener;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.IOFSwitch.PortChangeType;
+import net.floodlightcontroller.core.IOFSwitchListener;
+import net.floodlightcontroller.core.ImmutablePort;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.offloading.OffloadingProtocolServer;
+import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 
@@ -47,16 +58,18 @@ import net.floodlightcontroller.threadpool.IThreadPoolService;
  *
  **/
 
-public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
+public class OffloadingMaster implements IFloodlightModule, IFloodlightService, IOFSwitchListener, IOFMessageListener{
     protected static Logger log = LoggerFactory.getLogger(OffloadingMaster.class);
     // protected IRestApiService restApi;
 
-    // private IFloodlightProviderService floodlightProvider;
+    private IFloodlightProviderService floodlightProvider;
     private ScheduledExecutorService executor;
 
     //	private final AgentManager agentManager;
     private Map<String, OffloadingAgent> agentMap
         = new ConcurrentHashMap<String, OffloadingAgent> ();
+
+    // private IOFSwitch ofSwitch;
 
     // some defaults
     // private final int AGENT_PORT = 6777;
@@ -174,7 +187,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
     @Override
     public void init(FloodlightModuleContext context)
             throws FloodlightModuleException {
-        // floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+        floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
         // restApi = context.getServiceImpl(IRestApiService.class);
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
@@ -184,6 +197,8 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
     public void startUp(FloodlightModuleContext context)
             throws FloodlightModuleException {
 
+        floodlightProvider.addOFSwitchListener(this);
+        floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
         // restApi.addRestletRoutable(new OdinMasterWebRoutable());
 
         // read configure options
@@ -199,6 +214,75 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService {
         executor = tp.getScheduledExecutor();
         // Spawn threads for different services
         executor.execute(new OffloadingProtocolServer(this, port, executor));
+    }
+
+
+
+    /** IOFSwitchListener and IOFMessageListener methods **/
+
+    @Override
+    public String getName() {
+        return "OffloadingMaster";
+    }
+
+    @Override
+    public boolean isCallbackOrderingPrereq(OFType type, String name) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    @Override
+    public boolean isCallbackOrderingPostreq(OFType type, String name) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    @Override
+    public net.floodlightcontroller.core.IListener.Command receive(
+            IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+        // TODO Auto-generated method stub
+        log.info("Received OpenFlow Message\n");
+
+        OFPacketIn pi = (OFPacketIn) msg;
+        OFMatch match = new OFMatch();
+        match.loadFromPacket(pi.getPacketData(), (short) 0);
+        log.info("$$$$$$$$$OFMATCH$$$$$$$$$$$");
+        log.info(match.toString());
+        log.info("$$$$$$$$$IP-Destination$$$$$$$$$$$");
+        log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
+
+        return null;
+    }
+
+    @Override
+    public void switchAdded(long switchId) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void switchRemoved(long switchId) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void switchActivated(long switchId) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void switchPortChanged(long switchId, ImmutablePort port,
+            PortChangeType type) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void switchChanged(long switchId) {
+        // TODO Auto-generated method stub
+
     }
 
 

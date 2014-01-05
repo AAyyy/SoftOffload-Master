@@ -46,7 +46,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.offloading.OffloadingProtocolServer;
-import net.floodlightcontroller.packet.IPv4;
+// import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 
@@ -246,10 +246,9 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         OFPacketIn pi = (OFPacketIn) msg;
         OFMatch match = new OFMatch();
         match.loadFromPacket(pi.getPacketData(), (short) 0);
-        log.info("$$$$$$$$$OFMATCH$$$$$$$$$$$");
         log.info(match.toString());
-        log.info("$$$$$$$$$IP-Destination$$$$$$$$$$$");
-        log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
+        // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
+
 
         return null;
     }

@@ -216,7 +216,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         executor.execute(new OffloadingProtocolServer(this, port, executor));
 
         // Statistics
-        executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor));
+        executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor, 5));
     }
 
 

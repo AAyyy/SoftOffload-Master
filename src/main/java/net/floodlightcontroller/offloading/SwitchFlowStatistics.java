@@ -75,6 +75,8 @@ public class SwitchFlowStatistics implements Runnable {
 
         Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
 
+        log.info("here");
+
         for (IOFSwitch sw: swMap.values()) {
             try {
                 // System.out.println(sw.getStatistics(req));

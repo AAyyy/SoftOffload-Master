@@ -246,10 +246,10 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         // TODO Auto-generated method stub
         log.info("Received OpenFlow Message\n");
 
-        OFPacketIn pi = (OFPacketIn) msg;
-        OFMatch match = new OFMatch();
-        match.loadFromPacket(pi.getPacketData(), (short) 0);
-        log.info(match.toString());
+        // OFPacketIn pi = (OFPacketIn) msg;
+        // OFMatch match = new OFMatch();
+        // match.loadFromPacket(pi.getPacketData(), (short) 0);
+        // log.info(match.toString());
         // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
 
 

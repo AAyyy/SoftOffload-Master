@@ -60,6 +60,7 @@ public class SwitchFlowStatistics implements Runnable {
         // statsReply = new ArrayList<OFFlowStatisticsReply>();
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
+        OFFlowStatisticsReply reply;
 
         // Statistics request object for getting flows
         OFStatisticsRequest req = new OFStatisticsRequest();
@@ -67,7 +68,7 @@ public class SwitchFlowStatistics implements Runnable {
         int requestLength = req.getLengthU();
         OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
         specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
-        // specificReq.setOutPort(outPort);
+        specificReq.setOutPort((short)1);
         specificReq.setTableId((byte) 0xff);
         req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
         requestLength += specificReq.getLength();
@@ -86,11 +87,11 @@ public class SwitchFlowStatistics implements Runnable {
 
                     log.info("Statistics Info");
 
-
                     for (OFStatistics stat : values) {
                         // statsReply.add((OFFlowStatisticsReply) stat);
-                        stat = (OFFlowStatisticsReply) stat;
-                        log.info(stat.toString());
+                        reply = (OFFlowStatisticsReply) stat;
+                        log.info(reply.toString());
+                        System.out.println(reply.getByteCount());
                     }
                 }
             } catch (Exception e) {

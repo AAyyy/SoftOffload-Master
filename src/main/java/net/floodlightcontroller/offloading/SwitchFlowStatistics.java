@@ -63,6 +63,7 @@ public class SwitchFlowStatistics implements Runnable {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
+        int requestLength = req.getLengthU();
         float rate;
 
 
@@ -72,7 +73,6 @@ public class SwitchFlowStatistics implements Runnable {
         // Statistics request object for getting flows
         OFStatisticsRequest req = new OFStatisticsRequest();
         req.setStatisticType(OFStatisticsType.FLOW);
-        int requestLength = req.getLengthU();
         OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
         specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
         specificReq.setTableId((byte) 0xff);
@@ -85,6 +85,7 @@ public class SwitchFlowStatistics implements Runnable {
                     short outPort = port.getPortNumber();
                     if (outPort > 0) {
                         specificReq.setOutPort(outPort);
+                        requestLength = req.getLengthU();
                         req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
                         requestLength += specificReq.getLength();
                         req.setLengthU(requestLength);
@@ -97,8 +98,8 @@ public class SwitchFlowStatistics implements Runnable {
                                 // statsReply.add((OFFlowStatisticsReply) stat);
                                 reply = (OFFlowStatisticsReply) stat;
                                 rate = (float) reply.getByteCount()
-                                            / (reply.getDurationSeconds()
-                                            + 1000000000*reply.getDurationNanoseconds());
+                                            / ((float) reply.getDurationSeconds()
+                                            + ((float) reply.getDurationNanoseconds() / 1000000000));
                                 log.info(reply.toString());
                                 System.out.println(rate);
                             }

@@ -63,7 +63,7 @@ public class SwitchFlowStatistics implements Runnable {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
-        int requestLength = req.getLengthU();
+        int requestLength;
         float rate;
 
 

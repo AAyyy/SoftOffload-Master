@@ -29,7 +29,7 @@ public class SwitchFlowStatistics implements Runnable {
     private IFloodlightProviderService floodlightProvider;
     // private final ExecutorService executor;
 
-    private List<OFFlowStatisticsReply> statsReply;
+    // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
     private long interval;
 
@@ -57,7 +57,7 @@ public class SwitchFlowStatistics implements Runnable {
 
 
     private void printStatistics() {
-        statsReply = new ArrayList<OFFlowStatisticsReply>();
+        // statsReply = new ArrayList<OFFlowStatisticsReply>();
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
 
@@ -81,18 +81,16 @@ public class SwitchFlowStatistics implements Runnable {
             try {
                 // System.out.println(sw.getStatistics(req));
                 future = sw.queryStatistics(req);
-                values = future.get(10, TimeUnit.SECONDS);
+                values = future.get(3, TimeUnit.SECONDS);
                 if (values != null) {
 
                     log.info("Statistics Info");
 
 
                     for (OFStatistics stat : values) {
-                        statsReply.add((OFFlowStatisticsReply) stat);
-                    }
-
-                    for (OFFlowStatisticsReply flow: statsReply) {
-                        log.info(flow.toString());
+                        // statsReply.add((OFFlowStatisticsReply) stat);
+                        stat = (OFFlowStatisticsReply) stat;
+                        log.info(stat.toString());
                     }
                 }
             } catch (Exception e) {

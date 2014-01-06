@@ -22,7 +22,7 @@ import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SwitchFlowStatitics implements Runnable {
+public class SwitchFlowStatistics implements Runnable {
 
     protected static Logger log = LoggerFactory.getLogger(OffloadingProtocolServer.class);
 
@@ -39,7 +39,7 @@ public class SwitchFlowStatitics implements Runnable {
         }
     }
 
-    public SwitchFlowStatitics(IFloodlightProviderService fProvider, ExecutorService executor) {
+    public SwitchFlowStatistics(IFloodlightProviderService fProvider, ExecutorService executor) {
         this.floodlightProvider = fProvider;
         // this.executor = executor;
         this.timer = new Timer();
@@ -79,6 +79,10 @@ public class SwitchFlowStatitics implements Runnable {
                 future = sw.queryStatistics(req);
                 values = future.get(10, TimeUnit.SECONDS);
                 if (values != null) {
+
+                    log.info("Statistics Info");
+
+
                     for (OFStatistics stat : values) {
                         statsReply.add((OFFlowStatisticsReply) stat);
                     }

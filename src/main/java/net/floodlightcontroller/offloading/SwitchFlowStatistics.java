@@ -83,24 +83,26 @@ public class SwitchFlowStatistics implements Runnable {
                 Collection<ImmutablePort> ports = sw.getEnabledPorts();
                 for (ImmutablePort port: ports) {
                     short outPort = port.getPortNumber();
-                    specificReq.setOutPort(outPort);
-                    req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-                    requestLength += specificReq.getLength();
-                    req.setLengthU(requestLength);
-                }
+                    if (outPort > 0) {
+                        specificReq.setOutPort(outPort);
+                        req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+                        requestLength += specificReq.getLength();
+                        req.setLengthU(requestLength);
 
-                // make the query
-                future = sw.queryStatistics(req);
-                values = future.get(3, TimeUnit.SECONDS);
-                if (values != null) {
-                    for (OFStatistics stat : values) {
-                        // statsReply.add((OFFlowStatisticsReply) stat);
-                        reply = (OFFlowStatisticsReply) stat;
-                        rate = (float) reply.getByteCount()
-                                    / (reply.getDurationSeconds()
-                                    + 1000000000*reply.getDurationNanoseconds());
-                        log.info(reply.toString());
-                        System.out.println(rate);
+                        // make the query
+                        future = sw.queryStatistics(req);
+                        values = future.get(3, TimeUnit.SECONDS);
+                        if (values != null) {
+                            for (OFStatistics stat : values) {
+                                // statsReply.add((OFFlowStatisticsReply) stat);
+                                reply = (OFFlowStatisticsReply) stat;
+                                rate = (float) reply.getByteCount()
+                                            / (reply.getDurationSeconds()
+                                            + 1000000000*reply.getDurationNanoseconds());
+                                log.info(reply.toString());
+                                System.out.println(rate);
+                            }
+                        }
                     }
                 }
             } catch (Exception e) {

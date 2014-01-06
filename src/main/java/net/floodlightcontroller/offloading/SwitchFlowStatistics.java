@@ -63,19 +63,11 @@ public class SwitchFlowStatistics implements Runnable {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
-        int requestLength;
         float rate;
 
 
         // get switch
         Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
-
-        // Statistics request object for getting flows
-        OFStatisticsRequest req = new OFStatisticsRequest();
-        req.setStatisticType(OFStatisticsType.FLOW);
-        OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-        specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
-        specificReq.setTableId((byte) 0xff);
 
         for (IOFSwitch sw: swMap.values()) {
             try {
@@ -84,8 +76,15 @@ public class SwitchFlowStatistics implements Runnable {
                 for (ImmutablePort port: ports) {
                     short outPort = port.getPortNumber();
                     if (outPort > 0) {
+                        // Statistics request object for getting flows
+                        OFStatisticsRequest req = new OFStatisticsRequest();
+                        req.setStatisticType(OFStatisticsType.FLOW);
+                        int requestLength = req.getLengthU();
+                        OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
+                        specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
+                        specificReq.setTableId((byte) 0xff);
+
                         specificReq.setOutPort(outPort);
-                        requestLength = req.getLengthU();
                         req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
                         requestLength += specificReq.getLength();
                         req.setLengthU(requestLength);

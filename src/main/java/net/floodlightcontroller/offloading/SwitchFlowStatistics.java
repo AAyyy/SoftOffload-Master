@@ -39,17 +39,19 @@ public class SwitchFlowStatistics implements Runnable {
         }
     }
 
-    public SwitchFlowStatistics(IFloodlightProviderService fProvider, ExecutorService executor) {
+    public SwitchFlowStatistics(IFloodlightProviderService fProvider,
+            ExecutorService executor, int printInterval) {
         this.floodlightProvider = fProvider;
         // this.executor = executor;
         this.timer = new Timer();
+        this.interval = printInterval;
     }
 
 
 
     @Override
     public void run() {
-        timer.schedule(new PrintTask(), interval*1000);
+        timer.schedule(new PrintTask(), this.interval*1000);
     }
 
 

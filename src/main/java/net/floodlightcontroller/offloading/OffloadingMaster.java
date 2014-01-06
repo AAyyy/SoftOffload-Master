@@ -214,6 +214,9 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         executor = tp.getScheduledExecutor();
         // Spawn threads for different services
         executor.execute(new OffloadingProtocolServer(this, port, executor));
+
+        // Statistics
+        executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor));
     }
 
 

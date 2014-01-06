@@ -1,6 +1,7 @@
 package net.floodlightcontroller.offloading;
 
-import java.util.ArrayList;
+// import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.ImmutablePort;
 
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFStatisticsRequest;
@@ -61,6 +63,11 @@ public class SwitchFlowStatistics implements Runnable {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
+        float rate;
+
+
+        // get switch
+        Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
 
         // Statistics request object for getting flows
         OFStatisticsRequest req = new OFStatisticsRequest();
@@ -68,30 +75,32 @@ public class SwitchFlowStatistics implements Runnable {
         int requestLength = req.getLengthU();
         OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
         specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
-        specificReq.setOutPort((short)1);
         specificReq.setTableId((byte) 0xff);
-        req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-        requestLength += specificReq.getLength();
-        req.setLengthU(requestLength);
-
-        Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
-
-        log.info("here");
 
         for (IOFSwitch sw: swMap.values()) {
             try {
-                // System.out.println(sw.getStatistics(req));
+                // iterate all the ports
+                Collection<ImmutablePort> ports = sw.getEnabledPorts();
+                for (ImmutablePort port: ports) {
+                    short outPort = port.getPortNumber();
+                    specificReq.setOutPort(outPort);
+                    req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+                    requestLength += specificReq.getLength();
+                    req.setLengthU(requestLength);
+                }
+
+                // make the query
                 future = sw.queryStatistics(req);
                 values = future.get(3, TimeUnit.SECONDS);
                 if (values != null) {
-
-                    log.info("Statistics Info");
-
                     for (OFStatistics stat : values) {
                         // statsReply.add((OFFlowStatisticsReply) stat);
                         reply = (OFFlowStatisticsReply) stat;
+                        rate = (float) reply.getByteCount()
+                                    / (reply.getDurationSeconds()
+                                    + 1000000000*reply.getDurationNanoseconds());
                         log.info(reply.toString());
-                        System.out.println(reply.getByteCount());
+                        System.out.println(rate);
                     }
                 }
             } catch (Exception e) {

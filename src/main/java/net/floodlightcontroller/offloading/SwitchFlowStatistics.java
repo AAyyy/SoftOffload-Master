@@ -31,7 +31,7 @@ public class SwitchFlowStatistics implements Runnable {
 
     private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
-    private int interval;
+    private long interval;
 
     private class PrintTask extends TimerTask {
         public void run() {
@@ -44,14 +44,14 @@ public class SwitchFlowStatistics implements Runnable {
         this.floodlightProvider = fProvider;
         // this.executor = executor;
         this.timer = new Timer();
-        this.interval = printInterval;
+        this.interval = (long)printInterval;
     }
 
 
 
     @Override
     public void run() {
-        timer.schedule(new PrintTask(), this.interval*1000);
+        timer.schedule(new PrintTask(), (long)2000, this.interval*1000);
     }
 
 

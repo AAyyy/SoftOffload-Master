@@ -244,7 +244,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
     public net.floodlightcontroller.core.IListener.Command receive(
             IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
         // TODO Auto-generated method stub
-        log.info("Received OpenFlow Message\n");
+        // log.info("Received OpenFlow Message\n");
 
         // OFPacketIn pi = (OFPacketIn) msg;
         // OFMatch match = new OFMatch();

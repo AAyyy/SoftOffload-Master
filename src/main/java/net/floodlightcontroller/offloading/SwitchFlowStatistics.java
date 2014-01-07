@@ -1,10 +1,7 @@
 package net.floodlightcontroller.offloading;
 
-// import java.util.ArrayList;
-import java.io.IOException;
-import java.math.BigInteger;
-import java.net.InetAddress;
 import java.util.ArrayList;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +16,7 @@ import net.floodlightcontroller.core.IOFSwitch;
 
 import org.openflow.protocol.OFFlowMod;
 import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFPacketOut;
 import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.OFType;
@@ -40,7 +38,6 @@ public class SwitchFlowStatistics implements Runnable {
     // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
     private long interval;
-    private List<OFMatch> suspiciousMatches;
 
     // default max rate threshold
     static private final float RATE_THRESHOLD = 5000;
@@ -73,9 +70,8 @@ public class SwitchFlowStatistics implements Runnable {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
+        OFMatch match;
         float rate;
-        byte[] bytes;
-        InetAddress srcAddr, dstAddr;
 
 
         // get switch
@@ -87,11 +83,12 @@ public class SwitchFlowStatistics implements Runnable {
                 req.setStatisticType(OFStatisticsType.FLOW);
                 int requestLength = req.getLengthU();
                 OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-                specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
+                specificReq.setMatch(new OFMatch().setWildcards(0xffffffff)
+                                                  .setDataLayerType((short)0x0800));
                 specificReq.setTableId((byte) 0xff);
 
                 // using OFPort.OFPP_NONE(0xffff) as the outport
-                specificReq.setOutPort((short)0xffff);
+                specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
                 req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
                 requestLength += specificReq.getLength();
                 req.setLengthU(requestLength);
@@ -106,21 +103,23 @@ public class SwitchFlowStatistics implements Runnable {
                         rate = (float) reply.getByteCount()
                                   / ((float) reply.getDurationSeconds()
                                   + ((float) reply.getDurationNanoseconds() / 1000000000));
-                        if (rate >= RATE_THRESHOLD && !suspiciousMatches.contains(reply.getMatch())) {
+                        match = reply.getMatch();
+                        // actions list is empty means the current flow action is to drop
+                        if (rate >= RATE_THRESHOLD && !reply.getActions().isEmpty()) {
                             // log.info(reply.toString());
 
-                            bytes = BigInteger.valueOf(reply.getMatch().getNetworkSource()).toByteArray();
-                            srcAddr = InetAddress.getByAddress(bytes);
-                            bytes = BigInteger.valueOf(reply.getMatch().getNetworkDestination()).toByteArray();
-                            dstAddr = InetAddress.getByAddress(bytes);
-                            log.info(srcAddr.getHostAddress() + " -- " + dstAddr.getHostAddress());
+                            System.out.println(match.getNetworkDestination());
 
-                            log.info("FlowRate=" + Float.toString(rate)
-                                    + " -- suspicious flow, drop matched pkts");
+                            byteArrayToStringMac(match.getDataLayerSource());
+                            log.info("Flow {} -> {}",
+                                byteArrayToStringMac(match.getDataLayerSource()),
+                                byteArrayToStringMac(match.getDataLayerDestination()));
+
+                            log.info("FlowRate = {}: suspicious flow, drop matched pkts",
+                                    Float.toString(rate));
 
                             // modify flow action to drop
-                            suspiciousMatches.add(reply.getMatch());
-                            setOFFlowActionToDrop(reply.getMatch(), sw);
+                            setOFFlowActionToDrop(match, sw);
                         }
                     }
                 }
@@ -141,6 +140,8 @@ public class SwitchFlowStatistics implements Runnable {
         // set flow_mod
         flowMod.setOutPort(OFPort.OFPP_NONE);
         flowMod.setMatch(match);
+        // this buffer_id is needed for avoiding a BAD_REQUEST error
+        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
         flowMod.setHardTimeout((short) 0);
         flowMod.setIdleTimeout((short) 20);
         flowMod.setActions(actions);
@@ -157,7 +158,21 @@ public class SwitchFlowStatistics implements Runnable {
         } catch (IOException e) {
             log.error("tried to write flow_mod to {} but failed: {}",
                         sw.getId(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Failure to modify flow entries", e);
         }
+    }
+
+    private String byteArrayToStringMac(byte[] mac) {
+        StringBuilder sb = new StringBuilder(18);
+
+        for (byte b: mac) {
+            if (sb.length() > 0)
+                sb.append(':');
+            sb.append(String.format("%02x", b));
+        }
+
+        return sb.toString();
     }
 
 }

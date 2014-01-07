@@ -16,6 +16,7 @@ import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.ImmutablePort;
 
 import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.statistics.OFFlowStatisticsReply;
 import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
@@ -71,40 +72,69 @@ public class SwitchFlowStatistics implements Runnable {
 
         for (IOFSwitch sw: swMap.values()) {
             try {
-                // iterate all the ports
-                Collection<ImmutablePort> ports = sw.getEnabledPorts();
-                for (ImmutablePort port: ports) {
-                    short outPort = port.getPortNumber();
-                    if (outPort > 0) {
-                        // Statistics request object for getting flows
-                        OFStatisticsRequest req = new OFStatisticsRequest();
-                        req.setStatisticType(OFStatisticsType.FLOW);
-                        int requestLength = req.getLengthU();
-                        OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-                        specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
-                        specificReq.setTableId((byte) 0xff);
+//                // iterate all the ports
+//                Collection<ImmutablePort> ports = sw.getEnabledPorts();
+//                for (ImmutablePort port: ports) {
+//                    short outPort = port.getPortNumber();
+//                    if (outPort > 0) { // exclude internal port
+//                        // Statistics request object for getting flows
+//                        OFStatisticsRequest req = new OFStatisticsRequest();
+//                        req.setStatisticType(OFStatisticsType.FLOW);
+//                        int requestLength = req.getLengthU();
+//                        OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
+//                        specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
+//                        specificReq.setTableId((byte) 0xff);
+//
+//                        specificReq.setOutPort(outPort);
+//                        req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+//                        requestLength += specificReq.getLength();
+//                        req.setLengthU(requestLength);
+//
+//                        // make the query
+//                        future = sw.queryStatistics(req);
+//                        values = future.get(3, TimeUnit.SECONDS);
+//                        if (values != null) {
+//                            for (OFStatistics stat : values) {
+//                                // statsReply.add((OFFlowStatisticsReply) stat);
+//                                reply = (OFFlowStatisticsReply) stat;
+//                                rate = (float) reply.getByteCount()
+//                                            / ((float) reply.getDurationSeconds()
+//                                            + ((float) reply.getDurationNanoseconds() / 1000000000));
+//                                log.info(reply.toString());
+//                                System.out.println(rate);
+//                            }
+//                        }
+//                    }
+//                }
 
-                        specificReq.setOutPort(outPort);
-                        req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-                        requestLength += specificReq.getLength();
-                        req.setLengthU(requestLength);
+                OFStatisticsRequest req = new OFStatisticsRequest();
+                req.setStatisticType(OFStatisticsType.FLOW);
+                int requestLength = req.getLengthU();
+                OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
+                specificReq.setMatch(new OFMatch().setWildcards(0xffffffff));
+                specificReq.setTableId((byte) 0xff);
 
-                        // make the query
-                        future = sw.queryStatistics(req);
-                        values = future.get(3, TimeUnit.SECONDS);
-                        if (values != null) {
-                            for (OFStatistics stat : values) {
-                                // statsReply.add((OFFlowStatisticsReply) stat);
-                                reply = (OFFlowStatisticsReply) stat;
-                                rate = (float) reply.getByteCount()
-                                            / ((float) reply.getDurationSeconds()
-                                            + ((float) reply.getDurationNanoseconds() / 1000000000));
-                                log.info(reply.toString());
-                                System.out.println(rate);
-                            }
-                        }
+                specificReq.setOutPort((short)0xffff);
+                req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+                requestLength += specificReq.getLength();
+                req.setLengthU(requestLength);
+
+                // make the query
+                future = sw.queryStatistics(req);
+                values = future.get(3, TimeUnit.SECONDS);
+                if (values != null) {
+                    for (OFStatistics stat : values) {
+                        // statsReply.add((OFFlowStatisticsReply) stat);
+                        reply = (OFFlowStatisticsReply) stat;
+                        rate = (float) reply.getByteCount()
+                                  / ((float) reply.getDurationSeconds()
+                                  + ((float) reply.getDurationNanoseconds() / 1000000000));
+                        log.info(reply.toString());
+                        System.out.println(rate);
                     }
                 }
+
+
             } catch (Exception e) {
                 log.error("Failure retrieving statistics from switch " + sw, e);
             }

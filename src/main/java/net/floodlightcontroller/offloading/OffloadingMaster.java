@@ -29,7 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 // import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
-// import org.openflow.protocol.OFPacketIn;
+import org.openflow.protocol.OFPacketIn;
 import org.openflow.protocol.OFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -246,7 +246,9 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         // TODO Auto-generated method stub
         // log.info("Received OpenFlow Message\n");
 
-        // OFPacketIn pi = (OFPacketIn) msg;
+        OFPacketIn pi = (OFPacketIn) msg;
+        System.out.println(pi.toString());
+
         // OFMatch match = new OFMatch();
         // match.loadFromPacket(pi.getPacketData(), (short) 0);
         // log.info(match.toString());

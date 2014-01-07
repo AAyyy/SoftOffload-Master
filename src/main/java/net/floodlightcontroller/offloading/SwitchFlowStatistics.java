@@ -2,6 +2,8 @@ package net.floodlightcontroller.offloading;
 
 import java.util.ArrayList;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +42,7 @@ public class SwitchFlowStatistics implements Runnable {
     private long interval;
 
     // default max rate threshold
-    static private final float RATE_THRESHOLD = 5000;
+    static private final float RATE_THRESHOLD = 10000;
 
     private class PrintTask extends TimerTask {
         public void run() {
@@ -83,9 +85,8 @@ public class SwitchFlowStatistics implements Runnable {
                 req.setStatisticType(OFStatisticsType.FLOW);
                 int requestLength = req.getLengthU();
                 OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-                specificReq.setMatch(new OFMatch().setWildcards(0xffffffff)
-                                                  .setDataLayerType((short)0x0800));
-                specificReq.setTableId((byte) 0xff);
+                specificReq.setMatch(new OFMatch().setDataLayerType((short)0x0800));
+                specificReq.setTableId((byte)0xff);
 
                 // using OFPort.OFPP_NONE(0xffff) as the outport
                 specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
@@ -97,7 +98,7 @@ public class SwitchFlowStatistics implements Runnable {
                 future = sw.queryStatistics(req);
                 values = future.get(3, TimeUnit.SECONDS);
                 if (values != null) {
-                    for (OFStatistics stat : values) {
+                    for (OFStatistics stat: values) {
                         // statsReply.add((OFFlowStatisticsReply) stat);
                         reply = (OFFlowStatisticsReply) stat;
                         rate = (float) reply.getByteCount()
@@ -115,8 +116,8 @@ public class SwitchFlowStatistics implements Runnable {
                                 byteArrayToStringMac(match.getDataLayerSource()),
                                 byteArrayToStringMac(match.getDataLayerDestination()));
 
-                            log.info("FlowRate = {}: suspicious flow, drop matched pkts",
-                                    Float.toString(rate));
+                            log.info("FlowRate = {}bytes/s: suspicious flow, " +
+                                    "drop matched pkts", Float.toString(rate));
 
                             // modify flow action to drop
                             setOFFlowActionToDrop(match, sw);
@@ -131,11 +132,13 @@ public class SwitchFlowStatistics implements Runnable {
         }
     }
 
-    private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) {
+    private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) throws UnknownHostException {
 
         OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
         // set no action to drop
         List<OFAction> actions = new ArrayList<OFAction>();
+
+        pack(InetAddress.getByName("192.168.0.100").getAddress());
 
         // set flow_mod
         flowMod.setOutPort(OFPort.OFPP_NONE);
@@ -173,6 +176,15 @@ public class SwitchFlowStatistics implements Runnable {
         }
 
         return sb.toString();
+    }
+
+    private int pack(byte[] bytes) {
+        int val = 0;
+        for (int i = 0; i < bytes.length; i++) {
+          val <<= 8;
+          val |= bytes[i] & 0xff;
+        }
+        return val;
     }
 
 }

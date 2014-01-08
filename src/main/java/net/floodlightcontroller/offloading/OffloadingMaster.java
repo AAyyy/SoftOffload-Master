@@ -18,19 +18,34 @@
 package net.floodlightcontroller.offloading;
 
 
+import java.io.IOException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 // import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-// import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFFlowMod;
+import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
+import org.openflow.protocol.OFPacketOut;
+import org.openflow.protocol.OFPort;
+import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.OFType;
+import org.openflow.protocol.action.OFAction;
+import org.openflow.protocol.statistics.OFFlowStatisticsReply;
+import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
+import org.openflow.protocol.statistics.OFStatistics;
+import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +61,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.offloading.OffloadingProtocolServer;
+import net.floodlightcontroller.packet.Ethernet;
 // import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
@@ -74,6 +90,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
     // some defaults
     // private final int AGENT_PORT = 6777;
     static private final int DEFAULT_PORT = 2819;
+    static private final float RATE_THRESHOLD = 5000;
 
     public OffloadingMaster(){
         // clientManager = new ClientManager();
@@ -157,6 +174,100 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         agentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r);
     }
 
+    private void getFlowStatistics(OFMatch reqMatch, IOFSwitch sw) {
+        List<OFStatistics> values = null;
+        Future<List<OFStatistics>> future;
+        OFFlowStatisticsReply reply;
+        OFMatch match;
+        float rate;
+        Ethernet mac;
+
+        try {
+            OFStatisticsRequest req = new OFStatisticsRequest();
+            req.setStatisticType(OFStatisticsType.FLOW);
+            int requestLength = req.getLengthU();
+            OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
+            specificReq.setMatch(reqMatch);
+            specificReq.setTableId((byte)0xff);
+
+            // using OFPort.OFPP_NONE(0xffff) as the outport
+            specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
+            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+            requestLength += specificReq.getLength();
+            req.setLengthU(requestLength);
+
+            // make the query
+            future = sw.queryStatistics(req);
+            values = future.get(3, TimeUnit.SECONDS);
+            if (values != null) {
+                for (OFStatistics stat: values) {
+                    // statsReply.add((OFFlowStatisticsReply) stat);
+
+                    reply = (OFFlowStatisticsReply) stat;
+                    rate = (float) reply.getByteCount()
+                              / ((float) reply.getDurationSeconds()
+                              + ((float) reply.getDurationNanoseconds() / 1000000000));
+                    match = reply.getMatch();
+                    // actions list is empty means the current flow action is to drop
+                    if (rate >= RATE_THRESHOLD && !reply.getActions().isEmpty()) {
+                        // log.info(reply.toString());
+
+                        System.out.println(match.getNetworkDestination());
+                        System.out.println(match.getNetworkSource());
+
+                        mac = new Ethernet().setSourceMACAddress(match.getDataLayerSource())
+                                               .setDestinationMACAddress(match.getDataLayerDestination());
+
+                        log.info("Flow {} -> {}", mac.getSourceMAC().toString(),
+                                                  mac.getDestinationMAC().toString());
+
+                        log.info("FlowRate = {}bytes/s: suspicious flow, " +
+                                "drop matched pkts", Float.toString(rate));
+
+                        // modify flow action to drop
+                        setOFFlowActionToDrop(match, sw);
+                    }
+                }
+            }
+
+
+        } catch (Exception e) {
+            log.error("Failure retrieving statistics from switch " + sw, e);
+        }
+    }
+
+    private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) throws UnknownHostException {
+
+        OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
+        // set no action to drop
+        List<OFAction> actions = new ArrayList<OFAction>();
+
+        // set flow_mod
+        flowMod.setOutPort(OFPort.OFPP_NONE);
+        flowMod.setMatch(match);
+        // this buffer_id is needed for avoiding a BAD_REQUEST error
+        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+        flowMod.setHardTimeout((short) 0);
+        flowMod.setIdleTimeout((short) 20);
+        flowMod.setActions(actions);
+        flowMod.setCommand(OFFlowMod.OFPFC_MODIFY_STRICT);
+
+        // send flow_mod
+        if (sw == null) {
+            log.debug("Switch is not connected!");
+            return;
+        }
+        try {
+            sw.write(flowMod, null);
+            sw.flush();
+        } catch (IOException e) {
+            log.error("tried to write flow_mod to {} but failed: {}",
+                        sw.getId(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Failure to modify flow entries", e);
+        }
+    }
+
 
     //********* from IFloodlightModule **********//
 
@@ -216,7 +327,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         executor.execute(new OffloadingProtocolServer(this, port, executor));
 
         // Statistics
-        executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor, 6));
+        // executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor, 6));
     }
 
 
@@ -249,8 +360,12 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         OFPacketIn pi = (OFPacketIn) msg;
         System.out.println(pi.toString());
 
-        // OFMatch match = new OFMatch();
-        // match.loadFromPacket(pi.getPacketData(), (short) 0);
+        OFMatch match = new OFMatch();
+        match.loadFromPacket(pi.getPacketData(), (short) 0);
+
+        getFlowStatistics(match, sw);
+
+
         // log.info(match.toString());
         // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
 

@@ -35,8 +35,8 @@ public class OffloadingClient implements Comparable<Object> {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
-    private long swDpid;    // associated openflow switch, 0 means not be fully initialized
-    private short swInPort; // associated openflow port, -1 means not be fully initialized
+    private long swDpid;    // associated openflow switch, 0 means it is not the real value
+    private short swInPort; // associated openflow port, -1 means it is not the real value
 
 
     /**

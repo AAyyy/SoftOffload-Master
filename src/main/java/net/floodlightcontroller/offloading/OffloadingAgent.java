@@ -74,9 +74,9 @@ public class OffloadingAgent {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
             e.printStackTrace();
+            System.exit(1);
         } catch (UnknownHostException e1) {
             e1.printStackTrace();
-        } finally {
             System.exit(1);
         }
     }

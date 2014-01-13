@@ -231,6 +231,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         }
 
         try {
+
             BufferedReader br = new BufferedReader (new FileReader(networkTopoFile));
 
             String strLine;
@@ -290,7 +291,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
             br.close();
 
         } catch (FileNotFoundException e1) {
-            log.error("Agent authentication list (config option poolFile) not supplied. Terminating.");
+            log.error("Network topology config is not found. Terminating.");
             System.exit(1);
         } catch (IOException e) {
             e.printStackTrace();

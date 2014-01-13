@@ -233,10 +233,10 @@ public class OffloadingAgent {
                     client.setIpAddress(clientIpAddr);
                 }
             } else {
-                OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr);
+                OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr, swDpid);
                 clientMap.put(clientEthAddr, client);
 
-                log.info("Detected and initialzed client {} -- {}", clientEthAddr, clientIpAddr);
+                log.info("Discoveried client {} -- {}, initializing it...", clientEthAddr, clientIpAddr);
 
                 // send ack message to agent ap
                 byte[] buf = new byte[128];

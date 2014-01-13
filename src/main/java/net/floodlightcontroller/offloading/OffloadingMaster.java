@@ -55,6 +55,7 @@ import net.floodlightcontroller.offloading.OffloadingProtocolServer;
 // import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
+import net.floodlightcontroller.util.MACAddress;
 
 
 /**
@@ -141,13 +142,15 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
                  ": " + upRate + " " + downRate);
 
         if (!isAgentTracked(agentAddr)) {
+            log.warn("Found unrecorded agent ap");
             addUnrecordedAgent(agentAddr);
         }
 
         float r1 = Float.parseFloat(upRate);
-        float r2 = Float.parseFloat(upRate);
+        float r2 = Float.parseFloat(downRate);
         agentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
         agentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
+        System.out.println(agentMap.get(agentAddr.getHostAddress()).toString());
     }
 
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
@@ -158,13 +161,13 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
                 upRate + " " + downRate);
 
         if (!isAgentTracked(agentAddr)) {
+            log.warn("Found unrecorded agent ap");
             addUnrecordedAgent(agentAddr);
         }
 
         float r1 = Float.parseFloat(upRate);
         float r2 = Float.parseFloat(downRate);
         agentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
-        System.out.println(agentMap.get(agentAddr.getHostAddress()).toString());
     }
 
 
@@ -331,14 +334,27 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
     @Override
     public net.floodlightcontroller.core.IListener.Command receive(
             IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-        // TODO Auto-generated method stub
-        // log.info("Received OpenFlow Message\n");
 
         OFPacketIn pi = (OFPacketIn) msg;
         // System.out.println(pi.toString());
 
         OFMatch match = new OFMatch();
         match.loadFromPacket(pi.getPacketData(), (short) 0);
+        MACAddress srcMacAddr = MACAddress.valueOf(match.getDataLayerSource());
+        for (OffloadingAgent agent: agentMap.values()) {
+            OffloadingClient clt = agent.getClient(srcMacAddr);
+            if (clt != null) {
+                if (clt.getSwitchInPort() == (short)-1) {
+                    clt.setSwitchInPort(match.getInputPort());
+                } else if (clt.getSwitchDpid() != sw.getId()) {
+                    log.warn("Client dpid might be different from associated AP!");
+                    clt.setSwitchDpid(sw.getId());
+                } else if (clt.getSwitchInPort() != match.getInputPort()) {
+                    log.warn("Client inport changed!");
+                    clt.setSwitchInPort(match.getInputPort());
+                }
+            }
+        }
 
         // log.info(match.toString());
         // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));

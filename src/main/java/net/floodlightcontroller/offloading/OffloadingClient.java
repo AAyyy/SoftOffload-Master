@@ -35,8 +35,8 @@ public class OffloadingClient implements Comparable<Object> {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
-    private long swDpid;    // associated openflow switch
-    private short swInPort; // associated openflow port
+    private long swDpid;    // associated openflow switch, 0 means not be fully initialized
+    private short swInPort; // associated openflow port, -1 means not be fully initialized
 
 
     /**
@@ -48,6 +48,8 @@ public class OffloadingClient implements Comparable<Object> {
     public OffloadingClient(MACAddress hwAddress, InetAddress ipAddress) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
+        this.swDpid = (long)0;
+        this.swInPort = (short)-1;
     }
 
     /**
@@ -59,6 +61,34 @@ public class OffloadingClient implements Comparable<Object> {
     public OffloadingClient(String hwAddress, String ipAddress) throws UnknownHostException {
         this.hwAddress = MACAddress.valueOf(hwAddress);
         this.ipAddress = InetAddress.getByName(ipAddress);
+        this.swDpid = (long)0;
+        this.swInPort = (short)-1;
+    }
+
+    /**
+     * construct a client instance
+     *
+     * @param hwAddress Client's hw address
+     * @param ipv4Address Client's IPv4 address
+     */
+    public OffloadingClient(MACAddress hwAddress, InetAddress ipAddress, long dpid) {
+        this.hwAddress = hwAddress;
+        this.ipAddress = ipAddress;
+        this.swDpid = dpid;
+        this.swInPort = (short)-1;
+    }
+
+    /**
+     * construct a client instance
+     *
+     * @param hwAddress Client's hw address
+     * @param ipv4Address Client's IPv4 address
+     */
+    public OffloadingClient(String hwAddress, String ipAddress, long dpid) throws UnknownHostException {
+        this.hwAddress = MACAddress.valueOf(hwAddress);
+        this.ipAddress = InetAddress.getByName(ipAddress);
+        this.swDpid = dpid;
+        this.swInPort = (short)-1;
     }
 
     /**
@@ -163,7 +193,7 @@ public class OffloadingClient implements Comparable<Object> {
     public String toString() {
         StringBuilder builder = new StringBuilder();
 
-        builder.append("Client " + hwAddress.toString() + "ipAddr="
+        builder.append("Client " + hwAddress.toString() + ", ipAddr="
                 + ipAddress.getHostAddress() + ", uprate="
                 + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
                 + ", dpid=" + Long.toString(swDpid) + ", inport="

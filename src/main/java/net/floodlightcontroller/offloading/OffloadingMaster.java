@@ -18,34 +18,24 @@
 package net.floodlightcontroller.offloading;
 
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
-// import java.net.Socket;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
-import org.openflow.protocol.OFFlowMod;
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
-import org.openflow.protocol.OFPacketOut;
-import org.openflow.protocol.OFPort;
-import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.OFType;
-import org.openflow.protocol.action.OFAction;
-import org.openflow.protocol.statistics.OFFlowStatisticsReply;
-import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
-import org.openflow.protocol.statistics.OFStatistics;
-import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +51,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.offloading.OffloadingProtocolServer;
-import net.floodlightcontroller.packet.Ethernet;
+// import net.floodlightcontroller.packet.Ethernet;
 // import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
@@ -81,19 +71,19 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
     private IFloodlightProviderService floodlightProvider;
     private ScheduledExecutorService executor;
 
-    //	private final AgentManager agentManager;
-    private Map<String, OffloadingAgent> agentMap
-        = new ConcurrentHashMap<String, OffloadingAgent> ();
+    private NetworkManager networkManager;
+    private Map<String, List<String>> networkTopoConfig = new HashMap<String, List<String>>();
+    private Map<String, OffloadingAgent> agentMap = new ConcurrentHashMap<String, OffloadingAgent> ();
 
     // private IOFSwitch ofSwitch;
 
     // some defaults
     // private final int AGENT_PORT = 6777;
     static private final int DEFAULT_PORT = 2819;
-    static private final float RATE_THRESHOLD = 5000;
+    static private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
 
     public OffloadingMaster(){
-        // clientManager = new ClientManager();
+        networkManager = new NetworkManager();
     }
 
     /**
@@ -101,13 +91,11 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
      *
      * @param ipv4Address Client's IPv4 address
      */
-    public void addAgent(final InetAddress ipv4Address) {
+    public void addUnrecordedAgent(final InetAddress ipv4Address) {
         String ipAddr = ipv4Address.getHostAddress();
 
-        if (!agentMap.containsKey(ipAddr)) {
-            OffloadingAgent agent = new OffloadingAgent(ipv4Address);
-            agentMap.put(ipAddr, agent);
-        }
+        OffloadingAgent agent = new OffloadingAgent(ipv4Address, (long)0);
+        agentMap.put(ipAddr, agent);
     }
 
     /**
@@ -132,10 +120,11 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
             final String clientEthAddr, final String clientIpAddr) {
 
         log.info("Client message from " + agentAddr.getHostAddress() + ": " +
-                clientEthAddr + " - " + clientIpAddr);
+               clientEthAddr + " - " + clientIpAddr);
 
         if (!isAgentTracked(agentAddr)) {
-            addAgent(agentAddr);
+            log.warn("Found unrecorded agent ap");
+            addUnrecordedAgent(agentAddr);
         }
 
         agentMap.get(agentAddr.getHostAddress()).receiveClientInfo(clientEthAddr,
@@ -147,126 +136,37 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
      *
      * @param AgentAddr
      */
-    void receiveAgentRate(final InetAddress agentAddr, final String rate) {
+    void receiveAgentRate(final InetAddress agentAddr, final String upRate, final String downRate) {
         log.info("Agent rate message from " + agentAddr.getHostAddress() +
-                 ": " + rate);
+                 ": " + upRate + " " + downRate);
 
         if (!isAgentTracked(agentAddr)) {
-            addAgent(agentAddr);
+            addUnrecordedAgent(agentAddr);
         }
 
-        float r = Float.parseFloat(rate);
-        agentMap.get(agentAddr.getHostAddress()).updateRate(r);
+        float r1 = Float.parseFloat(upRate);
+        float r2 = Float.parseFloat(upRate);
+        agentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
+        agentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
     }
 
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
-            final String clientIpAddr, final String clientRate) {
+            final String clientIpAddr, final String upRate, final String downRate) {
 
         log.info("Client rate message from " + agentAddr.getHostAddress() +
                 ": " + clientEthAddr + " -- " + clientIpAddr + " -- " +
-                clientRate);
+                upRate + " " + downRate);
 
         if (!isAgentTracked(agentAddr)) {
-            addAgent(agentAddr);
+            addUnrecordedAgent(agentAddr);
         }
 
-        float r = Float.parseFloat(clientRate);
-        agentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r);
+        float r1 = Float.parseFloat(upRate);
+        float r2 = Float.parseFloat(downRate);
+        agentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
+        System.out.println(agentMap.get(agentAddr.getHostAddress()).toString());
     }
 
-    private void getFlowStatistics(OFMatch reqMatch, IOFSwitch sw) {
-        List<OFStatistics> values = null;
-        Future<List<OFStatistics>> future;
-        OFFlowStatisticsReply reply;
-        OFMatch match;
-        float rate;
-        Ethernet mac;
-
-        try {
-            OFStatisticsRequest req = new OFStatisticsRequest();
-            req.setStatisticType(OFStatisticsType.FLOW);
-            int requestLength = req.getLengthU();
-            OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-            specificReq.setMatch(reqMatch);
-            specificReq.setTableId((byte)0xff);
-
-            // using OFPort.OFPP_NONE(0xffff) as the outport
-            specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
-            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-            requestLength += specificReq.getLength();
-            req.setLengthU(requestLength);
-
-            // make the query
-            future = sw.queryStatistics(req);
-            values = future.get(3, TimeUnit.SECONDS);
-            if (values != null) {
-                for (OFStatistics stat: values) {
-                    // statsReply.add((OFFlowStatisticsReply) stat);
-
-                    reply = (OFFlowStatisticsReply) stat;
-                    rate = (float) reply.getByteCount()
-                              / ((float) reply.getDurationSeconds()
-                              + ((float) reply.getDurationNanoseconds() / 1000000000));
-                    match = reply.getMatch();
-                    // actions list is empty means the current flow action is to drop
-                    if (rate >= RATE_THRESHOLD && !reply.getActions().isEmpty()) {
-                        // log.info(reply.toString());
-
-                        System.out.println(match.getNetworkDestination());
-                        System.out.println(match.getNetworkSource());
-
-                        mac = new Ethernet().setSourceMACAddress(match.getDataLayerSource())
-                                               .setDestinationMACAddress(match.getDataLayerDestination());
-
-                        log.info("Flow {} -> {}", mac.getSourceMAC().toString(),
-                                                  mac.getDestinationMAC().toString());
-
-                        log.info("FlowRate = {}bytes/s: suspicious flow, " +
-                                "drop matched pkts", Float.toString(rate));
-
-                        // modify flow action to drop
-                        setOFFlowActionToDrop(match, sw);
-                    }
-                }
-            }
-
-
-        } catch (Exception e) {
-            log.error("Failure retrieving statistics from switch " + sw, e);
-        }
-    }
-
-    private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) throws UnknownHostException {
-
-        OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
-        // set no action to drop
-        List<OFAction> actions = new ArrayList<OFAction>();
-
-        // set flow_mod
-        flowMod.setOutPort(OFPort.OFPP_NONE);
-        flowMod.setMatch(match);
-        // this buffer_id is needed for avoiding a BAD_REQUEST error
-        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-        flowMod.setHardTimeout((short) 0);
-        flowMod.setIdleTimeout((short) 20);
-        flowMod.setActions(actions);
-        flowMod.setCommand(OFFlowMod.OFPFC_MODIFY_STRICT);
-
-        // send flow_mod
-        if (sw == null) {
-            log.debug("Switch is not connected!");
-            return;
-        }
-        try {
-            sw.write(flowMod, null);
-            sw.flush();
-        } catch (IOException e) {
-            log.error("tried to write flow_mod to {} but failed: {}",
-                        sw.getId(), e.getMessage());
-        } catch (Exception e) {
-            log.error("Failure to modify flow entries", e);
-        }
-    }
 
 
     //********* from IFloodlightModule **********//
@@ -315,10 +215,86 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         // read configure options
         Map<String, String> configOptions = context.getConfigParams(this);
 
+        // master port config
         int port = DEFAULT_PORT;
         String portNum = configOptions.get("masterPort");
         if (portNum != null) {
             port = Integer.parseInt(portNum);
+        }
+
+        // network topology config
+        String networkTopoFile = DEFAULT_TOPOLOGY_FILE;
+        String networkTopoFileConfig = configOptions.get("networkFile");
+
+        if (networkTopoFileConfig != null) {
+            networkTopoFile = networkTopoFileConfig;
+        }
+
+        try {
+            BufferedReader br = new BufferedReader (new FileReader(networkTopoFile));
+
+            String strLine;
+
+            /* Each line has the following format:
+             *
+             * Key value1 value2...
+             */
+            while ((strLine = br.readLine()) != null) {
+                if (strLine.startsWith("#")) // comment
+                    continue;
+
+                if (strLine.length() == 0) // blank line
+                    continue;
+
+                // Openflow Switch IP Address
+                String [] fields = strLine.split(" ");
+                if (!fields[0].equals("OFSwitchIP")) {
+                    log.error("Missing OFSwitchIP field " + fields[0]);
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length != 2) {
+                    log.error("A OFSwitch field should specify a single string as IP address");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                String swIP = fields[1];
+
+                // APs
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after OFSwitchIP field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("AP")){
+                    log.error("A OFSwitchIP field should be followed by a AP field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("An AP field must have at least one ap defined for it");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (networkTopoConfig.containsKey(swIP)) {
+                    log.warn("Redundent switch, ignore it");
+                    continue;
+                }
+                networkTopoConfig.put(swIP, new ArrayList<String>());
+                for (int i = 1; i < fields.length; i++) {
+                    networkTopoConfig.get(swIP).add(fields[i]);
+                }
+            }
+
+            br.close();
+
+        } catch (FileNotFoundException e1) {
+            log.error("Agent authentication list (config option poolFile) not supplied. Terminating.");
+            System.exit(1);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
         }
 
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
@@ -358,13 +334,10 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         // log.info("Received OpenFlow Message\n");
 
         OFPacketIn pi = (OFPacketIn) msg;
-        System.out.println(pi.toString());
+        // System.out.println(pi.toString());
 
         OFMatch match = new OFMatch();
         match.loadFromPacket(pi.getPacketData(), (short) 0);
-
-        getFlowStatistics(match, sw);
-
 
         // log.info(match.toString());
         // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
@@ -381,14 +354,36 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
 
     @Override
     public void switchRemoved(long switchId) {
-        // TODO Auto-generated method stub
-
+        if (networkManager.containsSwitch(switchId)) {
+            networkManager.removeSwitch(switchId);
+        } else {
+            log.warn("Unrecording switch is removed");
+        }
     }
 
     @Override
     public void switchActivated(long switchId) {
-        // TODO Auto-generated method stub
+        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
 
+        InetSocketAddress swInetAddr = (InetSocketAddress) sw.getInetAddress();
+        String swInetAddrStr = swInetAddr.getAddress().getHostAddress();
+
+        if (networkTopoConfig.containsKey(swInetAddrStr)) {
+            // first time
+            if (!networkManager.containsSwitch(switchId)) {
+                List<OffloadingAgent> agentList = new ArrayList<OffloadingAgent>();
+                for (String agentInetAddr: networkTopoConfig.get(swInetAddrStr)) {
+                    OffloadingAgent agent = new OffloadingAgent(agentInetAddr, switchId);
+                    agentMap.put(agentInetAddr, agent);
+                    agentList.add(agent);
+                }
+                networkManager.putSwitch(switchId, agentList);
+            }
+
+        } else {
+            log.warn("Unrecording switch is connected and activated");
+            networkManager.putSwitch(switchId, new ArrayList<OffloadingAgent>());
+        }
     }
 
     @Override

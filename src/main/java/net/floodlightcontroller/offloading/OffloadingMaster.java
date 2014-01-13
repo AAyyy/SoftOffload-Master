@@ -342,9 +342,11 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         match.loadFromPacket(pi.getPacketData(), (short) 0);
         MACAddress srcMacAddr = MACAddress.valueOf(match.getDataLayerSource());
         for (OffloadingAgent agent: agentMap.values()) {
-            OffloadingClient clt = agent.getClient(srcMacAddr);
+            OffloadingClient clt = agent.getClient(srcMacAddr.toString());
+
             if (clt != null) {
                 if (clt.getSwitchInPort() == (short)-1) {
+                    System.out.println();
                     clt.setSwitchInPort(match.getInputPort());
                 } else if (clt.getSwitchDpid() != sw.getId()) {
                     log.warn("Client dpid might be different from associated AP!");

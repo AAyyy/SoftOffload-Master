@@ -24,6 +24,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,8 +47,8 @@ public class OffloadingAgent {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
-    private long swDpid;                        // 0 means not initialized yet
-    private short swInPort = (short)-1;        // -1 means not initialized yet
+    private long swDpid;                        // 0 means it is not the real value
+    private short swInPort = (short)-1;        // -1 means it is not the real value
     private DatagramSocket agentSocket = null;
 
     private Map<String, OffloadingClient> clientMap
@@ -102,7 +103,7 @@ public class OffloadingAgent {
     }
 
     public long getSwitchDpid() {
-     // (short)0 means not initialzed yet
+        // (short)0 means not fully initialzed yet
         return this.swDpid;
     }
 
@@ -111,7 +112,7 @@ public class OffloadingAgent {
     }
 
     public short getSwitchInPort() {
-        // (short)-1 means not initialzed yet
+        // (short)-1 means not fully initialzed yet
         return this.swInPort;
     }
 
@@ -126,7 +127,7 @@ public class OffloadingAgent {
      * @param ipv4Address Client's IPv4 address
      */
     public void addClient(final MACAddress clientHwAddress, final InetAddress ipv4Address) {
-        String mac = clientHwAddress.toString();
+        String mac = clientHwAddress.toString().toLowerCase();
 
         if (!clientMap.containsKey(mac)) {
             clientMap.put(mac, new OffloadingClient(clientHwAddress, ipv4Address));
@@ -139,7 +140,7 @@ public class OffloadingAgent {
      * @param initailized client instance
      */
     public void addClient(OffloadingClient client) {
-        String clientMac = client.getMacAddress().toString();
+        String clientMac = client.getMacAddress().toString().toLowerCase();
 
         if (!clientMap.containsKey(clientMac)) {
             clientMap.put(clientMac, client);
@@ -152,9 +153,9 @@ public class OffloadingAgent {
      * @param macAddress MAC address string
      */
     public OffloadingClient getClient(String macAddress) {
-        assert clientMap.containsKey(macAddress);
+        // assert clientMap.containsKey(macAddress);
 
-        return clientMap.get(macAddress);
+        return clientMap.get(macAddress.toLowerCase());
     }
 
     /**
@@ -163,10 +164,19 @@ public class OffloadingAgent {
      * @param macAddress MAC address
      */
     public OffloadingClient getClient(MACAddress macAddress) {
-        String clientMac = macAddress.toString();
-        assert clientMap.containsKey(clientMac);
+        String clientMac = macAddress.toString().toLowerCase();
+        // assert clientMap.containsKey(clientMac);
 
         return clientMap.get(clientMac);
+    }
+
+    /**
+     * get all corresponding client instances
+     *
+     */
+    public Collection<OffloadingClient> getAllClients() {
+
+        return clientMap.values();
     }
 
     /**
@@ -175,7 +185,7 @@ public class OffloadingAgent {
      * @param client - initailized client instance
      */
     public void removeClient(OffloadingClient client) {
-        String clientMac = client.getMacAddress().toString();
+        String clientMac = client.getMacAddress().toString().toLowerCase();
 
         if (clientMap.containsKey(clientMac)) {
             clientMap.remove(clientMac);
@@ -188,9 +198,17 @@ public class OffloadingAgent {
      * @param mac address string
      */
     public void removeClient(String clientMac) {
-        if (!clientMap.containsKey(clientMac)) {
-            clientMap.remove(clientMac);
+        if (!clientMap.containsKey(clientMac.toLowerCase())) {
+            clientMap.remove(clientMac.toLowerCase());
         }
+    }
+
+    /**
+     * Remove all clients from the agent tracker
+     *
+     */
+    public void removeAllClients() {
+        clientMap.clear();
     }
 
     /**
@@ -233,8 +251,8 @@ public class OffloadingAgent {
                     client.setIpAddress(clientIpAddr);
                 }
             } else {
-                OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr, swDpid);
-                clientMap.put(clientEthAddr, client);
+                OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr, this.swDpid);
+                clientMap.put(clientEthAddr.toLowerCase(), client);
 
                 log.info("Discoveried client {} -- {}, initializing it...", clientEthAddr, clientIpAddr);
 

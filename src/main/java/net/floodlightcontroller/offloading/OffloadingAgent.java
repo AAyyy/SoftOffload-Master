@@ -27,16 +27,27 @@ import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.floodlightcontroller.util.MACAddress;
 
 /**
+ * OffloadingAgent class is designed for recording and manage local agent (AP) info:
+ * 1) ap's rate and ip address info
+ * 2) connecting client map
+ *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
 public class OffloadingAgent {
+    protected static Logger log = LoggerFactory.getLogger(OffloadingAgent.class);
 
     private InetAddress ipAddress;
-    private float rate;
+    private float upRate;
+    private float downRate;
+    private long swDpid;                        // 0 means not initialized yet
+    private short swInPort = (short)-1;        // -1 means not initialized yet
     private DatagramSocket agentSocket = null;
 
     private Map<String, OffloadingClient> clientMap
@@ -45,13 +56,28 @@ public class OffloadingAgent {
     // defaults
     private final int AGENT_PORT = 6777;
 
-    public OffloadingAgent(InetAddress ipAddr) {
+    public OffloadingAgent(InetAddress ipAddr, long dpid) {
         this.ipAddress = ipAddr;
+        this.swDpid = dpid;
         try {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    public OffloadingAgent(String ipAddr, long dpid) {
+        this.swDpid = dpid;
+        try {
+            this.ipAddress = InetAddress.getByName(ipAddr);
+            this.agentSocket = new DatagramSocket();
+        } catch (SocketException e) {
+            e.printStackTrace();
+        } catch (UnknownHostException e1) {
+            e1.printStackTrace();
+        } finally {
+            System.exit(1);
         }
     }
 
@@ -59,12 +85,38 @@ public class OffloadingAgent {
         return this.ipAddress;
     }
 
-    public float getRate() {
-        return this.rate;
+    public float getUpRate() {
+        return this.upRate;
     }
 
-    public void updateRate(float r) {
-        this.rate = r;
+    public void updateUpRate(float r) {
+        this.upRate = r;
+    }
+
+    public float getDownRate() {
+        return this.downRate;
+    }
+
+    public void updateDownRate(float r) {
+        this.downRate = r;
+    }
+
+    public long getSwitchDpid() {
+     // (short)0 means not initialzed yet
+        return this.swDpid;
+    }
+
+    public void setSwitchDpid(long dpid) {
+        this.swDpid = dpid;
+    }
+
+    public short getSwitchInPort() {
+        // (short)-1 means not initialzed yet
+        return this.swInPort;
+    }
+
+    public void setSwitchInPort(short port) {
+        this.swInPort = port;
     }
 
     /**
@@ -142,7 +194,31 @@ public class OffloadingAgent {
     }
 
     /**
+     * get client number on this agent
+     *
+     * @param macAddress MAC address
+     */
+    public int getClientNum() {
+        return clientMap.size();
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+
+        builder.append("Agent " + ipAddress.getHostAddress() + ", uprate="
+                + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
+                + ", dpid=" + Long.toString(swDpid) + ", inport="
+                + Short.toString(swInPort) + ", clientNum="
+                + Integer.toString(getClientNum()));
+
+        return builder.toString();
+    }
+
+    /**
      * response to the client-info messages from agent
+     * 1) initialize client instance
+     * 2) update client ip address info
      *
      * @param clientEthAddr, client MAC address in the messages
      * @param clientIpAddr, client IPv4 address
@@ -159,6 +235,8 @@ public class OffloadingAgent {
             } else {
                 OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr);
                 clientMap.put(clientEthAddr, client);
+
+                log.info("Detected and initialzed client {} -- {}", clientEthAddr, clientIpAddr);
 
                 // send ack message to agent ap
                 byte[] buf = new byte[128];
@@ -180,10 +258,16 @@ public class OffloadingAgent {
      * @param clientEthAddr, client mac address
      * @param rate, client's byte rate of ip flows
      */
-    void receiveClientRate(final String clientEthAddr, final float rate) {
+    void receiveClientRate(final String clientEthAddr, final float uprate,
+                            final float downrate) {
 
-        getClient(clientEthAddr).updateRate(rate);
-
+        if (clientMap.containsKey(clientEthAddr)) {
+            getClient(clientEthAddr).updateUpRate(uprate);
+            getClient(clientEthAddr).updateDownRate(downrate);
+            System.out.println(getClient(clientEthAddr).toString());
+        } else {
+            log.warn("Received uninilized Client rate info, discard it!");
+        }
     }
 
 }

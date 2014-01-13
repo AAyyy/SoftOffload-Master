@@ -90,15 +90,15 @@ class OffloadingProtocolServer implements Runnable {
     }
 
     private void receiveAgentRate(final InetAddress agentAddr,
-            final String rate) {
-        offloadingMaster.receiveAgentRate(agentAddr, rate);
+            final String upRate, final String downRate) {
+        offloadingMaster.receiveAgentRate(agentAddr, upRate, downRate);
     }
 
     private void receiveClientRate(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr,
-            final String clientRate) {
+            final String upRate, final String downRate) {
         offloadingMaster.receiveClientRate(agentAddr, clientEthAddr,
-                clientIpAddr, clientRate);
+                clientIpAddr, upRate, downRate);
     }
 
     private class ConnectionHandler implements Runnable {
@@ -122,15 +122,17 @@ class OffloadingProtocolServer implements Runnable {
                 receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
 
             } else if (msg_type.equals(MSG_AGENT_RATE)) {
-                final String agentRate = fields[1];
+                final String agentUpRate = fields[1];
+                final String agentDownRate = fields[2];
 
-                receiveAgentRate(agentAddr, agentRate);
+                receiveAgentRate(agentAddr, agentUpRate, agentDownRate);
             } else if (msg_type.equals(MSG_CLIENT_RATE)) {
                 final String clientEthAddr = fields[1];
                 final String clientIpAddr = fields[2];
-                final String clientRate = fields[3];
+                final String clientUpRate = fields[3];
+                final String clientDownRate = fields[4];
 
-                receiveClientRate(agentAddr, clientEthAddr, clientIpAddr, clientRate);
+                receiveClientRate(agentAddr, clientEthAddr, clientIpAddr, clientUpRate, clientDownRate);
             }
 
         }

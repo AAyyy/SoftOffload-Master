@@ -23,7 +23,7 @@ import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.Wildcards;
-import org.openflow.protocol.Wildcards.Flag;
+// import org.openflow.protocol.Wildcards.Flag;
 import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.statistics.OFFlowStatisticsReply;
 import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
@@ -44,7 +44,7 @@ public class SwitchFlowStatistics implements Runnable {
     private long interval;
 
     // default max rate threshold
-    static private final float RATE_THRESHOLD = 10000;
+    static private final float RATE_THRESHOLD = 30000;
 
     private class PrintTask extends TimerTask {
         public void run() {
@@ -68,6 +68,11 @@ public class SwitchFlowStatistics implements Runnable {
     }
 
 
+    // FIXME: currently the OFFlowStatisticsRequest can only use IN_PORT,
+    // DL_SRC, DL_DST and DL_VLAN_PCP to match flows, using other fields can
+    // only get an empty stats reply. In addition, the match in the reply
+    // only contains those four tuples
+    // This might be a bug of Floodlight???
 
     private void printStatistics() {
         // statsReply = new ArrayList<OFFlowStatisticsReply>();
@@ -78,7 +83,6 @@ public class SwitchFlowStatistics implements Runnable {
         float rate;
         Ethernet mac;
 
-
         // get switch
         Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
 
@@ -88,13 +92,7 @@ public class SwitchFlowStatistics implements Runnable {
                 req.setStatisticType(OFStatisticsType.FLOW);
                 int requestLength = req.getLengthU();
                 OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-                specificReq.setMatch(
-                    new OFMatch().setWildcards(
-                        Wildcards.FULL
-                                 .matchOn(Flag.DL_TYPE)
-                                 .withNwSrcMask(32)
-                                 .withNwDstMask(32))
-                );
+                specificReq.setMatch(new OFMatch().setWildcards(Wildcards.FULL));
                 specificReq.setTableId((byte)0xff);
 
                 // using OFPort.OFPP_NONE(0xffff) as the outport
@@ -117,13 +115,9 @@ public class SwitchFlowStatistics implements Runnable {
                         match = reply.getMatch();
                         // actions list is empty means the current flow action is to drop
                         if (rate >= RATE_THRESHOLD && !reply.getActions().isEmpty()) {
-                            // log.info(reply.toString());
-
-                            System.out.println(match.getNetworkDestination());
-                            System.out.println(match.getNetworkSource());
 
                             mac = new Ethernet().setSourceMACAddress(match.getDataLayerSource())
-                                                   .setDestinationMACAddress(match.getDataLayerDestination());
+                                                .setDestinationMACAddress(match.getDataLayerDestination());
 
                             log.info("Flow {} -> {}", mac.getSourceMAC().toString(),
                                                       mac.getDestinationMAC().toString());

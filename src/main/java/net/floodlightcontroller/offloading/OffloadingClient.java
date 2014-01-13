@@ -24,13 +24,19 @@ import java.net.UnknownHostException;
 import net.floodlightcontroller.util.MACAddress;
 
 /**
+ * Wireless client class
+ * Used for recording and managing client info
+ *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
 public class OffloadingClient implements Comparable<Object> {
     private final MACAddress hwAddress;
     private InetAddress ipAddress;
-    private float rate;
+    private float upRate;
+    private float downRate;
+    private long swDpid;    // associated openflow switch
+    private short swInPort; // associated openflow port
 
 
     /**
@@ -89,19 +95,81 @@ public class OffloadingClient implements Comparable<Object> {
     }
 
     /**
-     * get client's rate value
+     * get client's uprate value
      * @return
      */
-    public float getRate() {
-        return this.rate;
+    public float getUpRate() {
+        return this.upRate;
     }
 
     /**
-     * Set the client's rate value
+     * get client's downrate value
+     * @return
+     */
+    public float getDownRate() {
+        return this.downRate;
+    }
+
+    /**
+     * Set the client's up rate value
      * @param r
      */
-    public void updateRate(float r) {
-        this.rate = r;
+    public void updateUpRate(float r) {
+        this.upRate = r;
+    }
+
+    /**
+     * Set the client's down rate value
+     * @param r
+     */
+    public void updateDownRate(float r) {
+        this.downRate = r;
+    }
+
+    /**
+     * get client's corresponding openflow switch dataplane id
+     * @return
+     */
+    public long getSwitchDpid() {
+        return this.swDpid;
+    }
+
+    /**
+     * Set the client's association openflow switch's dataplane id
+     * this id can be used to get corresponding IOFSwitch instance
+     * @param dpid
+     */
+    public void setSwitchDpid(long dpid) {
+        this.swDpid = dpid;
+    }
+
+    /**
+     * get client's corresponding openflow switch in port
+     * @return
+     */
+    public short getSwitchInPort() {
+        return this.swInPort;
+    }
+
+    /**
+     * Set the client's association openflow switch's in port
+     * @param port
+     */
+    public void setSwitchInPort(short port) {
+        this.swInPort = port;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+
+        builder.append("Client " + hwAddress.toString() + "ipAddr="
+                + ipAddress.getHostAddress() + ", uprate="
+                + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
+                + ", dpid=" + Long.toString(swDpid) + ", inport="
+                + Short.toString(swInPort));
+
+        return builder.toString();
     }
 
     @Override

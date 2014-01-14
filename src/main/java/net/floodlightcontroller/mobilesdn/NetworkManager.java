@@ -1,7 +1,7 @@
 /**
  *
  */
-package net.floodlightcontroller.offloading;
+package net.floodlightcontroller.mobilesdn;
 
 // import java.util.HashMap;
 import java.util.List;
@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  */
 public class NetworkManager {
-    private Map<Long, List<OffloadingAgent>> swToApAgentMap = new ConcurrentHashMap<Long, List<OffloadingAgent>>();
+    private Map<Long, List<APAgent>> swToApAgentMap = new ConcurrentHashMap<Long, List<APAgent>>();
 
     public NetworkManager() {
         // initializing
@@ -26,11 +26,11 @@ public class NetworkManager {
         return swToApAgentMap.containsKey(swId);
     }
 
-    public void putSwitch(long swId, List<OffloadingAgent> agentList) {
+    public void putSwitch(long swId, List<APAgent> agentList) {
         swToApAgentMap.put(swId, agentList);
     }
 
-    public List<OffloadingAgent> getAssociatedAgent(long swId) {
+    public List<APAgent> getAssociatedAgent(long swId) {
         return swToApAgentMap.get(swId);
     }
 

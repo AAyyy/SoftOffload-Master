@@ -1,4 +1,4 @@
-package net.floodlightcontroller.offloading;
+package net.floodlightcontroller.mobilesdn;
 
 import java.util.ArrayList;
 import java.io.IOException;
@@ -32,9 +32,9 @@ import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SwitchFlowStatistics implements Runnable {
+public class OFMonitor implements Runnable {
 
-    protected static Logger log = LoggerFactory.getLogger(OffloadingProtocolServer.class);
+    protected static Logger log = LoggerFactory.getLogger(OFMonitor.class);
 
     private IFloodlightProviderService floodlightProvider;
     // private final ExecutorService executor;
@@ -52,7 +52,7 @@ public class SwitchFlowStatistics implements Runnable {
         }
     }
 
-    public SwitchFlowStatistics(IFloodlightProviderService fProvider,
+    public OFMonitor(IFloodlightProviderService fProvider,
             ExecutorService executor, int printInterval) {
         this.floodlightProvider = fProvider;
         // this.executor = executor;

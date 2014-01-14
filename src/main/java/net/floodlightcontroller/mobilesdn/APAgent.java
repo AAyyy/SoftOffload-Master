@@ -16,7 +16,7 @@
 
 
 
-package net.floodlightcontroller.offloading;
+package net.floodlightcontroller.mobilesdn;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -24,42 +24,55 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.openflow.protocol.OFFlowMod;
+import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFPacketOut;
+import org.openflow.protocol.OFPort;
+import org.openflow.protocol.Wildcards;
+import org.openflow.protocol.Wildcards.Flag;
+import org.openflow.protocol.action.OFAction;
+import org.openflow.protocol.action.OFActionOutput;
+import org.openflow.util.U16;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.util.MACAddress;
 
 /**
- * OffloadingAgent class is designed for recording and manage local agent (AP) info:
+ * APAgent class is designed for recording and manage AP(local agent) info:
  * 1) ap's rate and ip address info
  * 2) connecting client map
  *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
-public class OffloadingAgent {
-    protected static Logger log = LoggerFactory.getLogger(OffloadingAgent.class);
+public class APAgent {
+    protected static Logger log = LoggerFactory.getLogger(APAgent.class);
 
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
-    private long swDpid;                        // 0 means it is not the real value
-    private short swInPort = (short)-1;        // -1 means it is not the real value
+    private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
 
-    private Map<String, OffloadingClient> clientMap
-        = new ConcurrentHashMap<String, OffloadingClient> ();
+    private Map<String, Client> clientMap
+        = new ConcurrentHashMap<String, Client> ();
 
     // defaults
     private final int AGENT_PORT = 6777;
+    static private final float RATE_THRESHOLD = 5000;
 
-    public OffloadingAgent(InetAddress ipAddr, long dpid) {
+
+    public APAgent(InetAddress ipAddr) {
         this.ipAddress = ipAddr;
-        this.swDpid = dpid;
         try {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
@@ -68,8 +81,7 @@ public class OffloadingAgent {
         }
     }
 
-    public OffloadingAgent(String ipAddr, long dpid) {
-        this.swDpid = dpid;
+    public APAgent(String ipAddr) {
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
             this.agentSocket = new DatagramSocket();
@@ -82,43 +94,89 @@ public class OffloadingAgent {
         }
     }
 
+    public APAgent(InetAddress ipAddr, IOFSwitch sw) {
+        this.ipAddress = ipAddr;
+        this.ofSwitch = sw;
+        try {
+            this.agentSocket = new DatagramSocket();
+        } catch (SocketException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    public APAgent(String ipAddr, IOFSwitch sw) {
+
+        this.ofSwitch = sw;
+
+        try {
+            this.ipAddress = InetAddress.getByName(ipAddr);
+            this.agentSocket = new DatagramSocket();
+        } catch (SocketException e) {
+            e.printStackTrace();
+            System.exit(1);
+        } catch (UnknownHostException e1) {
+            e1.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    /**
+     * Get the AP's management IPv4 address.
+     * @return
+     */
     public InetAddress getIpAddress() {
         return this.ipAddress;
     }
 
+    /**
+     * get AP's total up rate value
+     * @return
+     */
     public float getUpRate() {
         return this.upRate;
     }
 
+    /**
+     * Set the AP's up rate value
+     * @param r
+     */
     public void updateUpRate(float r) {
         this.upRate = r;
     }
 
+    /**
+     * get AP's total down rate value
+     * @return
+     */
     public float getDownRate() {
         return this.downRate;
     }
 
+    /**
+     * Set the AP's down rate value
+     * @param r
+     */
     public void updateDownRate(float r) {
         this.downRate = r;
     }
 
-    public long getSwitchDpid() {
-        // (short)0 means not fully initialzed yet
-        return this.swDpid;
+    /**
+     * get AP's corresponding openflow switch instance
+     * @return
+     */
+    public IOFSwitch getSwitch() {
+        return this.ofSwitch;
     }
 
-    public void setSwitchDpid(long dpid) {
-        this.swDpid = dpid;
+    /**
+     * set AP's associating openflow switch instance
+     * @return
+     */
+    public void setSwitch(IOFSwitch sw) {
+        this.ofSwitch = sw;
     }
 
-    public short getSwitchInPort() {
-        // (short)-1 means not fully initialzed yet
-        return this.swInPort;
-    }
-
-    public void setSwitchInPort(short port) {
-        this.swInPort = port;
-    }
 
     /**
      * Add a client to the agent tracker
@@ -127,10 +185,13 @@ public class OffloadingAgent {
      * @param ipv4Address Client's IPv4 address
      */
     public void addClient(final MACAddress clientHwAddress, final InetAddress ipv4Address) {
+        // we use lower case keys for the clientMap
         String mac = clientHwAddress.toString().toLowerCase();
 
-        if (!clientMap.containsKey(mac)) {
-            clientMap.put(mac, new OffloadingClient(clientHwAddress, ipv4Address));
+        if (ofSwitch != null) {
+            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, ofSwitch));
+        } else {
+            clientMap.put(mac, new Client(clientHwAddress, ipv4Address));
         }
     }
 
@@ -139,12 +200,10 @@ public class OffloadingAgent {
      *
      * @param initailized client instance
      */
-    public void addClient(OffloadingClient client) {
+    public void addClient(Client client) {
         String clientMac = client.getMacAddress().toString().toLowerCase();
 
-        if (!clientMap.containsKey(clientMac)) {
-            clientMap.put(clientMac, client);
-        }
+        clientMap.put(clientMac, client);
     }
 
     /**
@@ -152,7 +211,7 @@ public class OffloadingAgent {
      *
      * @param macAddress MAC address string
      */
-    public OffloadingClient getClient(String macAddress) {
+    public Client getClient(String macAddress) {
         // assert clientMap.containsKey(macAddress);
 
         return clientMap.get(macAddress.toLowerCase());
@@ -163,7 +222,7 @@ public class OffloadingAgent {
      *
      * @param macAddress MAC address
      */
-    public OffloadingClient getClient(MACAddress macAddress) {
+    public Client getClient(MACAddress macAddress) {
         String clientMac = macAddress.toString().toLowerCase();
         // assert clientMap.containsKey(clientMac);
 
@@ -174,7 +233,7 @@ public class OffloadingAgent {
      * get all corresponding client instances
      *
      */
-    public Collection<OffloadingClient> getAllClients() {
+    public Collection<Client> getAllClients() {
 
         return clientMap.values();
     }
@@ -184,7 +243,7 @@ public class OffloadingAgent {
      *
      * @param client - initailized client instance
      */
-    public void removeClient(OffloadingClient client) {
+    public void removeClient(Client client) {
         String clientMac = client.getMacAddress().toString().toLowerCase();
 
         if (clientMap.containsKey(clientMac)) {
@@ -198,8 +257,10 @@ public class OffloadingAgent {
      * @param mac address string
      */
     public void removeClient(String clientMac) {
-        if (!clientMap.containsKey(clientMac.toLowerCase())) {
-            clientMap.remove(clientMac.toLowerCase());
+        String mac = clientMac.toLowerCase();
+
+        if (!clientMap.containsKey(mac)) {
+            clientMap.remove(mac);
         }
     }
 
@@ -226,8 +287,7 @@ public class OffloadingAgent {
 
         builder.append("Agent " + ipAddress.getHostAddress() + ", uprate="
                 + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
-                + ", dpid=" + Long.toString(swDpid) + ", inport="
-                + Short.toString(swInPort) + ", clientNum="
+                + ", dpid=" + Long.toString(ofSwitch.getId()) + ", clientNum="
                 + Integer.toString(getClientNum()));
 
         return builder.toString();
@@ -243,16 +303,20 @@ public class OffloadingAgent {
      */
     void receiveClientInfo(final String clientEthAddr, final String clientIpAddr) {
 
-        // update client info
+        String mac = clientEthAddr.toLowerCase();
+
         try {
-            if (clientMap.containsKey(clientEthAddr)) {
-                OffloadingClient client = clientMap.get(clientEthAddr);
+            if (clientMap.containsKey(mac)) { // update client info
+                Client client = clientMap.get(mac);
                 if (client.getIpAddress().getHostAddress() != clientIpAddr) {
                     client.setIpAddress(clientIpAddr);
                 }
             } else {
-                OffloadingClient client = new OffloadingClient(clientEthAddr, clientIpAddr, this.swDpid);
-                clientMap.put(clientEthAddr.toLowerCase(), client);
+                Client client = new Client(clientEthAddr, clientIpAddr);
+                if (ofSwitch != null) {
+                    client.setSwitch(ofSwitch);
+                }
+                clientMap.put(mac, client);
 
                 log.info("Discoveried client {} -- {}, initializing it...", clientEthAddr, clientIpAddr);
 
@@ -279,10 +343,54 @@ public class OffloadingAgent {
     void receiveClientRate(final String clientEthAddr, final float uprate,
                             final float downrate) {
 
-        if (clientMap.containsKey(clientEthAddr)) {
-            getClient(clientEthAddr).updateUpRate(uprate);
-            getClient(clientEthAddr).updateDownRate(downrate);
-            System.out.println(getClient(clientEthAddr).toString());
+        String mac = clientEthAddr.toLowerCase();
+
+        if (clientMap.containsKey(mac)) {
+            Client clt = clientMap.get(mac);
+            IOFSwitch sw = clt.getSwitch();
+
+            // modify flow action to drop
+            if (uprate >= RATE_THRESHOLD && sw != null) {
+
+                OFMatch match = new OFMatch();
+                match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
+                                                 .matchOn(Flag.DL_TYPE)
+                                                 .matchOn(Flag.NW_SRC)
+                                                 .withNwSrcMask(32));
+                match.setDataLayerSource(mac)
+                     .setDataLayerType((short)0x0800)
+                     .setNetworkSource(IPv4.toIPv4Address(clt.getIpAddress().getAddress()));
+
+                OFFlowMod flowMod = new OFFlowMod();
+                // set no action to drop
+                List<OFAction> actions = new ArrayList<OFAction>();
+
+                // set flow_mod
+                flowMod.setOutPort(OFPort.OFPP_NONE);
+                flowMod.setMatch(match);
+                // this buffer_id is needed for avoiding a BAD_REQUEST error
+                flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+                flowMod.setHardTimeout((short) 0);
+                flowMod.setIdleTimeout((short) 20);
+                flowMod.setActions(actions);
+                flowMod.setLength(U16.t(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH));
+
+                // send flow_mod
+
+                try {
+                    sw.write(flowMod, null);
+                    sw.flush();
+                } catch (IOException e) {
+                    log.error("tried to write flow_mod to {} but failed: {}",
+                                sw.getId(), e.getMessage());
+                } catch (Exception e) {
+                    log.error("Failure to modify flow entries", e);
+                }
+            }
+
+            clt.updateUpRate(uprate);
+            clt.updateDownRate(downrate);
+            System.out.println(clt.toString());
         } else {
             log.warn("Received uninilized Client rate info, discard it!");
         }

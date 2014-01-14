@@ -15,7 +15,7 @@
 **/
 
 
-package net.floodlightcontroller.offloading;
+package net.floodlightcontroller.mobilesdn;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -35,9 +35,9 @@ import org.slf4j.LoggerFactory;
  *
  **/
 
-class OffloadingProtocolServer implements Runnable {
+class ClickManageServer implements Runnable {
 
-    protected static Logger log = LoggerFactory.getLogger(OffloadingProtocolServer.class);
+    protected static Logger log = LoggerFactory.getLogger(ClickManageServer.class);
 
     // Message types
     private final String MSG_CLIENT_INFO = "client";
@@ -48,10 +48,10 @@ class OffloadingProtocolServer implements Runnable {
 
     private DatagramSocket controllerSocket;
     private final ExecutorService executor;
-    private final OffloadingMaster offloadingMaster;
+    private final Master master;
 
-    public OffloadingProtocolServer (OffloadingMaster om, int port, ExecutorService executor) {
-        this.offloadingMaster = om;
+    public ClickManageServer (Master m, int port, ExecutorService executor) {
+        this.master = m;
         this.SERVER_PORT = port;
         this.executor = executor;
     }
@@ -86,18 +86,18 @@ class OffloadingProtocolServer implements Runnable {
 
     private void receiveClientInfo(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr) {
-        offloadingMaster.receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
+        master.receiveClientInfo(agentAddr, clientEthAddr, clientIpAddr);
     }
 
     private void receiveAgentRate(final InetAddress agentAddr,
             final String upRate, final String downRate) {
-        offloadingMaster.receiveAgentRate(agentAddr, upRate, downRate);
+        master.receiveAgentRate(agentAddr, upRate, downRate);
     }
 
     private void receiveClientRate(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr,
             final String upRate, final String downRate) {
-        offloadingMaster.receiveClientRate(agentAddr, clientEthAddr,
+        master.receiveClientRate(agentAddr, clientEthAddr,
                 clientIpAddr, upRate, downRate);
     }
 
@@ -108,7 +108,7 @@ class OffloadingProtocolServer implements Runnable {
             receivedPacket = dp;
         }
 
-        // Agent message handler
+        // AP Agent message handler
         public void run() {
             final String msg = new String(receivedPacket.getData()).trim().toLowerCase();
             final String[] fields = msg.split(" ");

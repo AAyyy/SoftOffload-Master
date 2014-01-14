@@ -15,7 +15,7 @@
 **/
 
 
-package net.floodlightcontroller.offloading;
+package net.floodlightcontroller.mobilesdn;
 
 
 import java.io.BufferedReader;
@@ -50,23 +50,23 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.offloading.OffloadingProtocolServer;
 // import net.floodlightcontroller.packet.Ethernet;
 // import net.floodlightcontroller.packet.IPv4;
 // import net.floodlightcontroller.restserver.IRestApiService;
+import net.floodlightcontroller.mobilesdn.ClickManageServer;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.util.MACAddress;
 
 
 /**
- * This is an implementation of sdn wireless controllers
+ * This is an implementation of sdn wireless and mobile controller
  *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  **/
 
-public class OffloadingMaster implements IFloodlightModule, IFloodlightService, IOFSwitchListener, IOFMessageListener{
-    protected static Logger log = LoggerFactory.getLogger(OffloadingMaster.class);
+public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchListener, IOFMessageListener{
+    protected static Logger log = LoggerFactory.getLogger(Master.class);
     // protected IRestApiService restApi;
 
     private IFloodlightProviderService floodlightProvider;
@@ -74,7 +74,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
 
     private NetworkManager networkManager;
     private Map<String, List<String>> networkTopoConfig = new HashMap<String, List<String>>();
-    private Map<String, OffloadingAgent> agentMap = new ConcurrentHashMap<String, OffloadingAgent> ();
+    private Map<String, APAgent> apAgentMap = new ConcurrentHashMap<String, APAgent> ();
 
     // private IOFSwitch ofSwitch;
 
@@ -83,7 +83,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
     static private final int DEFAULT_PORT = 2819;
     static private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
 
-    public OffloadingMaster(){
+    public Master(){
         networkManager = new NetworkManager();
     }
 
@@ -92,20 +92,20 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
      *
      * @param ipv4Address Client's IPv4 address
      */
-    public void addUnrecordedAgent(final InetAddress ipv4Address) {
+    public void addUnrecordedAPAgent(final InetAddress ipv4Address) {
         String ipAddr = ipv4Address.getHostAddress();
 
-        OffloadingAgent agent = new OffloadingAgent(ipv4Address, (long)0);
-        agentMap.put(ipAddr, agent);
+        APAgent agent = new APAgent(ipv4Address);
+        apAgentMap.put(ipAddr, agent);
     }
 
     /**
-     * check whether an agent is in the hashmap
+     * check whether an agent is in the HashMap
      *
      * @param addr Agent's IPv4 address
      */
-    public boolean isAgentTracked(InetAddress addr) {
-        if (agentMap.containsKey(addr.getHostAddress())) {
+    public boolean isAPAgentTracked(InetAddress addr) {
+        if (apAgentMap.containsKey(addr.getHostAddress())) {
             return true;
         }
 
@@ -123,12 +123,12 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         log.info("Client message from " + agentAddr.getHostAddress() + ": " +
                clientEthAddr + " - " + clientIpAddr);
 
-        if (!isAgentTracked(agentAddr)) {
+        if (!isAPAgentTracked(agentAddr)) {
             log.warn("Found unrecorded agent ap");
-            addUnrecordedAgent(agentAddr);
+            addUnrecordedAPAgent(agentAddr);
         }
 
-        agentMap.get(agentAddr.getHostAddress()).receiveClientInfo(clientEthAddr,
+        apAgentMap.get(agentAddr.getHostAddress()).receiveClientInfo(clientEthAddr,
                 clientIpAddr);
     }
 
@@ -141,16 +141,16 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         log.info("Agent rate message from " + agentAddr.getHostAddress() +
                  ": " + upRate + " " + downRate);
 
-        if (!isAgentTracked(agentAddr)) {
+        if (!isAPAgentTracked(agentAddr)) {
             log.warn("Found unrecorded agent ap");
-            addUnrecordedAgent(agentAddr);
+            addUnrecordedAPAgent(agentAddr);
         }
 
         float r1 = Float.parseFloat(upRate);
         float r2 = Float.parseFloat(downRate);
-        agentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
-        agentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
-        System.out.println(agentMap.get(agentAddr.getHostAddress()).toString());
+        apAgentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
+        apAgentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
+        System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
     }
 
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
@@ -160,14 +160,14 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
                 ": " + clientEthAddr + " -- " + clientIpAddr + " -- " +
                 upRate + " " + downRate);
 
-        if (!isAgentTracked(agentAddr)) {
+        if (!isAPAgentTracked(agentAddr)) {
             log.warn("Found unrecorded agent ap");
-            addUnrecordedAgent(agentAddr);
+            addUnrecordedAPAgent(agentAddr);
         }
 
         float r1 = Float.parseFloat(upRate);
         float r2 = Float.parseFloat(downRate);
-        agentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
+        apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
     }
 
 
@@ -185,7 +185,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         IFloodlightService> m =
         new HashMap<Class<? extends IFloodlightService>,
         IFloodlightService>();
-        m.put(OffloadingMaster.class, this);
+        m.put(Master.class, this);
         return m;
     }
 
@@ -304,10 +304,10 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
         // Spawn threads for different services
-        executor.execute(new OffloadingProtocolServer(this, port, executor));
+        executor.execute(new ClickManageServer(this, port, executor));
 
         // Statistics
-        // executor.execute(new SwitchFlowStatistics(this.floodlightProvider, executor, 6));
+        // executor.execute(new OFMonitor(this.floodlightProvider, executor, 6));
     }
 
 
@@ -316,7 +316,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
 
     @Override
     public String getName() {
-        return "OffloadingMaster";
+        return "Master";
     }
 
     @Override
@@ -341,26 +341,18 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         OFMatch match = new OFMatch();
         match.loadFromPacket(pi.getPacketData(), (short) 0);
         MACAddress srcMacAddr = MACAddress.valueOf(match.getDataLayerSource());
-        for (OffloadingAgent agent: agentMap.values()) {
-            OffloadingClient clt = agent.getClient(srcMacAddr.toString());
+        for (APAgent agent: apAgentMap.values()) {
+            Client clt = agent.getClient(srcMacAddr.toString());
 
             if (clt != null) {
-                if (clt.getSwitchInPort() == (short)-1) {
-                    System.out.println();
-                    clt.setSwitchInPort(match.getInputPort());
-                } else if (clt.getSwitchDpid() != sw.getId()) {
+                if (clt.getSwitch() == null) {
+                    clt.setSwitch(sw);
+                } else if (clt.getSwitch().getId() != sw.getId()) {
                     log.warn("Client dpid might be different from associated AP!");
-                    clt.setSwitchDpid(sw.getId());
-                } else if (clt.getSwitchInPort() != match.getInputPort()) {
-                    log.warn("Client inport changed!");
-                    clt.setSwitchInPort(match.getInputPort());
+                    clt.setSwitch(sw);
                 }
             }
         }
-
-        // log.info(match.toString());
-        // log.info(IPv4.fromIPv4Address(match.getNetworkDestination()));
-
 
         return null;
     }
@@ -390,10 +382,10 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
         if (networkTopoConfig.containsKey(swInetAddrStr)) {
             // first time
             if (!networkManager.containsSwitch(switchId)) {
-                List<OffloadingAgent> agentList = new ArrayList<OffloadingAgent>();
+                List<APAgent> agentList = new ArrayList<APAgent>();
                 for (String agentInetAddr: networkTopoConfig.get(swInetAddrStr)) {
-                    OffloadingAgent agent = new OffloadingAgent(agentInetAddr, switchId);
-                    agentMap.put(agentInetAddr, agent);
+                    APAgent agent = new APAgent(agentInetAddr, sw);
+                    apAgentMap.put(agentInetAddr, agent);
                     agentList.add(agent);
                 }
                 networkManager.putSwitch(switchId, agentList);
@@ -401,7 +393,7 @@ public class OffloadingMaster implements IFloodlightModule, IFloodlightService, 
 
         } else {
             log.warn("Unrecording switch is connected and activated");
-            networkManager.putSwitch(switchId, new ArrayList<OffloadingAgent>());
+            networkManager.putSwitch(switchId, new ArrayList<APAgent>());
         }
     }
 

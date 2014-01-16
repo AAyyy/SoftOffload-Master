@@ -350,7 +350,8 @@ public class APAgent {
             // modify flow action to drop
             if (uprate >= RATE_THRESHOLD && sw != null) {
 
-                log.info("Detected suspicious traffic, drop the flow!");
+                log.info("FlowRate = {}bytes/s: suspicious flow, " +
+                        "drop matched pkts", Float.toString(uprate));
 
                 OFMatch match = new OFMatch();
                 match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
@@ -393,8 +394,6 @@ public class APAgent {
             clt.updateUpRate(uprate);
             clt.updateDownRate(downrate);
             System.out.println(clt.toString());
-            log.info("FlowRate = {}bytes/s: suspicious flow, " +
-                    "drop matched pkts", Float.toString(upRate));
         } else {
             log.warn("Received uninilized Client rate info, discard it!");
         }

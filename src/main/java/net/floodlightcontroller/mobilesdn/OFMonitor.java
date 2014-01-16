@@ -1,3 +1,20 @@
+/**
+*    Copyright 2013 University of Helsinki
+*
+*    Licensed under the Apache License, Version 2.0 (the "License"); you may
+*    not use this file except in compliance with the License. You may obtain
+*    a copy of the License at
+*
+*         http://www.apache.org/licenses/LICENSE-2.0
+*
+*    Unless required by applicable law or agreed to in writing, software
+*    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+*    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+*    License for the specific language governing permissions and limitations
+*    under the License.
+**/
+
+
 package net.floodlightcontroller.mobilesdn;
 
 import java.util.ArrayList;
@@ -32,6 +49,15 @@ import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Class designed for monitoring switch's OpenFlow table
+ *
+ * The flow table info can be used for later usage
+ *
+ * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
+ *
+ */
+
 public class OFMonitor implements Runnable {
 
     protected static Logger log = LoggerFactory.getLogger(OFMonitor.class);
@@ -46,6 +72,7 @@ public class OFMonitor implements Runnable {
     // default max rate threshold
     static private final float RATE_THRESHOLD = 30000;
 
+    // monitoring info is gathered by using a timer
     private class PrintTask extends TimerTask {
         public void run() {
             printStatistics();
@@ -61,12 +88,17 @@ public class OFMonitor implements Runnable {
     }
 
 
-
     @Override
     public void run() {
+        // start the timer with our task
         timer.schedule(new PrintTask(), (long)2000, this.interval*1000);
     }
 
+
+    /**
+     * Get flow statistics from switch by using OFFlowStatisticsRequest
+     *
+     */
 
     // FIXME: currently the OFFlowStatisticsRequest can only use IN_PORT,
     // DL_SRC, DL_DST and DL_VLAN_PCP to match flows, using other fields can
@@ -137,6 +169,13 @@ public class OFMonitor implements Runnable {
             }
         }
     }
+
+    /**
+     * Modify the action of open flow entries to drop
+     *
+     * @param match match info obtained from OFFlowStatisticsReply
+     * @param sw corresponding OpenFlow switch
+     */
 
     private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) throws UnknownHostException {
 

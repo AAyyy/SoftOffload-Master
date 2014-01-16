@@ -37,8 +37,6 @@ import org.openflow.protocol.OFPort;
 import org.openflow.protocol.Wildcards;
 import org.openflow.protocol.Wildcards.Flag;
 import org.openflow.protocol.action.OFAction;
-import org.openflow.protocol.action.OFActionOutput;
-import org.openflow.util.U16;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +47,7 @@ import net.floodlightcontroller.util.MACAddress;
 /**
  * APAgent class is designed for recording and manage AP(local agent) info:
  * 1) ap's rate and ip address info
- * 2) connecting client map
+ * 2) connecting client mapping
  *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
@@ -352,6 +350,8 @@ public class APAgent {
             // modify flow action to drop
             if (uprate >= RATE_THRESHOLD && sw != null) {
 
+                log.info("Detected suspicious traffic, drop the flow!");
+
                 OFMatch match = new OFMatch();
                 match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
                                                  .matchOn(Flag.DL_TYPE)
@@ -366,6 +366,8 @@ public class APAgent {
                 List<OFAction> actions = new ArrayList<OFAction>();
 
                 // set flow_mod
+                flowMod.setCookie(67);   // some value chosen randomly
+                flowMod.setPriority((short)200);
                 flowMod.setOutPort(OFPort.OFPP_NONE);
                 flowMod.setMatch(match);
                 // this buffer_id is needed for avoiding a BAD_REQUEST error
@@ -373,7 +375,7 @@ public class APAgent {
                 flowMod.setHardTimeout((short) 0);
                 flowMod.setIdleTimeout((short) 20);
                 flowMod.setActions(actions);
-                flowMod.setLength(U16.t(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH));
+                flowMod.setCommand(OFFlowMod.OFPFC_MODIFY);
 
                 // send flow_mod
 
@@ -391,6 +393,8 @@ public class APAgent {
             clt.updateUpRate(uprate);
             clt.updateDownRate(downrate);
             System.out.println(clt.toString());
+            log.info("FlowRate = {}bytes/s: suspicious flow, " +
+                    "drop matched pkts", Float.toString(upRate));
         } else {
             log.warn("Received uninilized Client rate info, discard it!");
         }

@@ -25,8 +25,8 @@ import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.util.MACAddress;
 
 /**
- * Wireless client class
- * Used for recording and managing client info
+ * Class for Wireless client:
+ * used for recording and managing client info
  *
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *

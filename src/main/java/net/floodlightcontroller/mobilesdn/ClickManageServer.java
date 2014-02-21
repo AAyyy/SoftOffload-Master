@@ -43,6 +43,7 @@ class ClickManageServer implements Runnable {
     private final String MSG_CLIENT_INFO = "client";
     private final String MSG_AGENT_RATE = "agentrate";
     private final String MSG_CLIENT_RATE = "clientrate";
+    private final String MSG_CLIENT_DISCONNECT = "clientdisconnect";
 
     private final int SERVER_PORT;
 
@@ -101,6 +102,11 @@ class ClickManageServer implements Runnable {
                 clientIpAddr, upRate, downRate);
     }
 
+    private void clientDisconnect(final InetAddress agentAddr,
+            final String clientEthAddr) {
+        master.clientDisconnect(agentAddr, clientEthAddr);
+    }
+
     private class ConnectionHandler implements Runnable {
         final DatagramPacket receivedPacket;
 
@@ -133,6 +139,10 @@ class ClickManageServer implements Runnable {
                 final String clientDownRate = fields[4];
 
                 receiveClientRate(agentAddr, clientEthAddr, clientIpAddr, clientUpRate, clientDownRate);
+            } else if (msg_type.equals(MSG_CLIENT_DISCONNECT)) {
+                final String clientEthAddr = fields[1];
+
+                clientDisconnect(agentAddr, clientEthAddr);
             }
 
         }

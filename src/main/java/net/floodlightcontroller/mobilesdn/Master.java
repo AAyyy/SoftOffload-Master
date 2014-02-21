@@ -115,7 +115,9 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     /**
      * Handle a ClientInfo message from an agent.
      *
-     * @param AgentAddr
+     * @param agentAddr
+     * @param clientEthAddr
+     * @param clientIpAddr
      */
     void receiveClientInfo(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr) {
@@ -130,6 +132,25 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
         apAgentMap.get(agentAddr.getHostAddress()).receiveClientInfo(clientEthAddr,
                 clientIpAddr);
+    }
+
+    /**
+     * Handle ClientDisconnect message from an agent.
+     *
+     * @param AgentAddr
+     */
+    void clientDisconnect(final InetAddress agentAddr,
+            final String clientEthAddr) {
+
+        log.info("Client " + clientEthAddr + " disconnected from agent "
+                + agentAddr.getHostAddress());
+
+        if (!isAPAgentTracked(agentAddr)) {
+            log.warn("Found unrecorded agent ap, ignore it!");
+            return;
+        }
+
+        apAgentMap.get(agentAddr.getHostAddress()).removeClient(clientEthAddr);
     }
 
     /**

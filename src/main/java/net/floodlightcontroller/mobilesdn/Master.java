@@ -171,7 +171,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         float r2 = Float.parseFloat(downRate);
         apAgentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
         apAgentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
-        System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
+        // System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
     }
 
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,

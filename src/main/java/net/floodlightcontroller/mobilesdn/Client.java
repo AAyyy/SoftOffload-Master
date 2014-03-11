@@ -20,6 +20,8 @@ package net.floodlightcontroller.mobilesdn;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.util.MACAddress;
@@ -36,8 +38,30 @@ public class Client implements Comparable<Object> {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
+
     private IOFSwitch ofSwitch = null;      // not initialized
+    private APAgent agent;
 
+    private Timer switchTimer;
+
+    // defaults
+    static private final long SECONDS = 3 * 60 * 1000;
+
+    private void initializeClient(APAgent agt) {
+        agent = agt;
+        switchTimer = new Timer();    // set the timer
+        switchTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                String message = "client|" + hwAddress.toString() + "|"
+                                    + ipAddress.getHostAddress()
+                                    + "|switch|sdntest1|open|\n";
+                agent.send(message);
+                // switchTimer.cancel();
+                // switchTimer.purge();
+            }
+        }, SECONDS);
+    }
 
     /**
      * construct a client instance
@@ -45,9 +69,11 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(MACAddress hwAddress, InetAddress ipAddress) {
+    public Client(MACAddress hwAddress, InetAddress ipAddress, APAgent agt) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
+
+        initializeClient(agt);
     }
 
     /**
@@ -56,9 +82,11 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(String hwAddress, String ipAddress) throws UnknownHostException {
+    public Client(String hwAddress, String ipAddress, APAgent agt) throws UnknownHostException {
         this.hwAddress = MACAddress.valueOf(hwAddress);
         this.ipAddress = InetAddress.getByName(ipAddress);
+
+        initializeClient(agt);
     }
 
     /**
@@ -67,10 +95,11 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(MACAddress hwAddress, InetAddress ipAddress, IOFSwitch sw) {
+    public Client(MACAddress hwAddress, InetAddress ipAddress, IOFSwitch sw, APAgent agt) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
         this.ofSwitch = sw;
+        initializeClient(agt);
     }
 
     /**
@@ -79,10 +108,11 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(String hwAddress, String ipAddress, IOFSwitch sw) throws UnknownHostException {
+    public Client(String hwAddress, String ipAddress, IOFSwitch sw, APAgent agt) throws UnknownHostException {
         this.hwAddress = MACAddress.valueOf(hwAddress);
         this.ipAddress = InetAddress.getByName(ipAddress);
         this.ofSwitch = sw;
+        initializeClient(agt);
     }
 
     /**
@@ -167,6 +197,14 @@ public class Client implements Comparable<Object> {
         this.ofSwitch = sw;
     }
 
+    /**
+     * clear the task for the timer
+     */
+    public void cancelTask() {
+        this.switchTimer.cancel();
+        this.switchTimer.purge();
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
@@ -205,4 +243,5 @@ public class Client implements Comparable<Object> {
 
         return -1;
     }
+
 }

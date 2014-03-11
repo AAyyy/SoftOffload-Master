@@ -66,7 +66,8 @@ public class APAgent {
 
     // defaults
     private final int AGENT_PORT = 6777;
-    static private final float RATE_THRESHOLD = 5000;
+    static private final float RATE_THRESHOLD = 500000;
+    static private final int MAX_LEN = 256;
 
 
     public APAgent(InetAddress ipAddr) {
@@ -187,9 +188,9 @@ public class APAgent {
         String mac = clientHwAddress.toString().toLowerCase();
 
         if (ofSwitch != null) {
-            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, ofSwitch));
+            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, ofSwitch, this));
         } else {
-            clientMap.put(mac, new Client(clientHwAddress, ipv4Address));
+            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, this));
         }
     }
 
@@ -245,6 +246,7 @@ public class APAgent {
         String clientMac = client.getMacAddress().toString().toLowerCase();
 
         if (clientMap.containsKey(clientMac)) {
+            clientMap.get(clientMac).cancelTask();
             clientMap.remove(clientMac);
         }
     }
@@ -258,6 +260,7 @@ public class APAgent {
         String mac = clientMac.toLowerCase();
 
         if (!clientMap.containsKey(mac)) {
+            clientMap.get(mac).cancelTask();
             clientMap.remove(mac);
         }
     }
@@ -267,6 +270,10 @@ public class APAgent {
      *
      */
     public void removeAllClients() {
+        for (Client i: clientMap.values()) {
+            i.cancelTask();
+        }
+
         clientMap.clear();
     }
 
@@ -277,6 +284,20 @@ public class APAgent {
      */
     public int getClientNum() {
         return clientMap.size();
+    }
+
+    public void send(String message) {
+        // send message to agent ap
+        byte[] buf = new byte[MAX_LEN];
+        buf = message.getBytes();
+        DatagramPacket packet = new DatagramPacket(buf, buf.length,
+                                        this.ipAddress, this.AGENT_PORT);
+        try {
+            this.agentSocket.send(packet);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -310,24 +331,15 @@ public class APAgent {
                     client.setIpAddress(clientIpAddr);
                 }
             } else {
-                Client client = new Client(clientEthAddr, clientIpAddr);
+                Client client = new Client(clientEthAddr, clientIpAddr, this);
                 if (ofSwitch != null) {
                     client.setSwitch(ofSwitch);
                 }
                 clientMap.put(mac, client);
 
                 log.info("Discoveried client {} -- {}, initializing it...", clientEthAddr, clientIpAddr);
-
-                // send ack message to agent ap
-                byte[] buf = new byte[128];
-                buf = "ack clientinfo \n".getBytes();
-                DatagramPacket packet = new DatagramPacket(buf, buf.length,
-                                                this.ipAddress, AGENT_PORT);
-                this.agentSocket.send(packet);
             }
         } catch (UnknownHostException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
             e.printStackTrace();
         }
     }

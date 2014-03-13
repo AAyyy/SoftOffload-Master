@@ -67,7 +67,7 @@ public class APAgent {
     // defaults
     private final int AGENT_PORT = 6777;
     static private final float RATE_THRESHOLD = 500000;
-    static private final int MAX_LEN = 256;
+    static private final int MAX_LEN = 512;
 
 
     public APAgent(InetAddress ipAddr) {
@@ -259,7 +259,7 @@ public class APAgent {
     public void removeClient(String clientMac) {
         String mac = clientMac.toLowerCase();
 
-        if (!clientMap.containsKey(mac)) {
+        if (clientMap.containsKey(mac)) {
             clientMap.get(mac).cancelTask();
             clientMap.remove(mac);
         }
@@ -291,6 +291,18 @@ public class APAgent {
         byte[] buf = new byte[MAX_LEN];
         buf = message.getBytes();
         DatagramPacket packet = new DatagramPacket(buf, buf.length,
+                                        this.ipAddress, this.AGENT_PORT);
+        try {
+            this.agentSocket.send(packet);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+    public void send(byte[] message) {
+        // send message to agent ap
+        DatagramPacket packet = new DatagramPacket(message, message.length,
                                         this.ipAddress, this.AGENT_PORT);
         try {
             this.agentSocket.send(packet);
@@ -337,7 +349,8 @@ public class APAgent {
                 }
                 clientMap.put(mac, client);
 
-                log.info("Discoveried client {} -- {}, initializing it...", clientEthAddr, clientIpAddr);
+                log.info("Connected to new client {} -- {}, initializing it...",
+                        clientEthAddr, clientIpAddr);
             }
         } catch (UnknownHostException e) {
             e.printStackTrace();
@@ -405,7 +418,7 @@ public class APAgent {
 
             clt.updateUpRate(uprate);
             clt.updateDownRate(downrate);
-            System.out.println(clt.toString());
+            // System.out.println(clt.toString());
         } else {
             log.warn("Received uninilized Client rate info, discard it!");
         }

@@ -23,6 +23,9 @@ import java.net.UnknownHostException;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.util.MACAddress;
 
@@ -34,6 +37,8 @@ import net.floodlightcontroller.util.MACAddress;
  *
  */
 public class Client implements Comparable<Object> {
+    protected static Logger log = LoggerFactory.getLogger(Client.class);
+
     private final MACAddress hwAddress;
     private InetAddress ipAddress;
     private float upRate;
@@ -50,15 +55,23 @@ public class Client implements Comparable<Object> {
     private void initializeClient(APAgent agt) {
         agent = agt;
         switchTimer = new Timer();    // set the timer
+
         switchTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                String message = "client|" + hwAddress.toString() + "|"
-                                    + ipAddress.getHostAddress()
-                                    + "|switch|sdntest1|open|\n";
+                // set up message data
+                byte[] mac = hwAddress.toBytes();
+                byte[] b1 = "c".getBytes();
+                byte[] b2 = "switch|sdntest1|open|\n".getBytes();
+
+                byte[] message = new byte[b1.length + b2.length + mac.length];
+
+                System.arraycopy(b1, 0, message, 0, b1.length);
+                System.arraycopy(mac, 0, message, b1.length, mac.length);
+                System.arraycopy(b2, 0, message, b1.length + mac.length, b2.length);
+
                 agent.send(message);
-                // switchTimer.cancel();
-                // switchTimer.purge();
+                log.info("Send message to agent for client switching");
             }
         }, SECONDS);
     }

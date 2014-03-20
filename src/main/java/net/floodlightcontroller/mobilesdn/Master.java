@@ -27,6 +27,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,19 +73,75 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     private IFloodlightProviderService floodlightProvider;
     private ScheduledExecutorService executor;
 
-    private NetworkManager networkManager;
-    private Map<String, List<String>> networkTopoConfig = new HashMap<String, List<String>>();
-    private Map<String, APAgent> apAgentMap = new ConcurrentHashMap<String, APAgent> ();
+    // private NetworkManager networkManager;
+    private Map<String, APAgent> apAgentMap = new ConcurrentHashMap<String, APAgent>();
+    private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
+    private List<SwitchOutQueue> swQueueList = new LinkedList<SwitchOutQueue>();
+
+    public class SwitchNetworkConfig implements Comparable<Object> {
+        private String swIPAddr;
+        private int outPort;
+        private List<String> apList;
+
+        public SwitchNetworkConfig(String ip, int port, List<String> ap) {
+            swIPAddr = ip;
+            outPort = port;
+            apList = ap;
+        }
+
+        public String getSwIPAddr() {
+            return swIPAddr;
+        }
+
+        public int getOutPort() {
+            return outPort;
+        }
+
+        public List<String> getAPList() {
+            return apList;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof SwitchNetworkConfig))
+                return false;
+
+            if (obj == this)
+                return true;
+
+            SwitchNetworkConfig that = (SwitchNetworkConfig) obj;
+
+            return (this.swIPAddr.toLowerCase().equals(that.getSwIPAddr().toLowerCase())
+                    && this.outPort == that.getOutPort());
+        }
+
+        @Override
+        public int compareTo(Object arg0) {
+            assert (arg0 instanceof SwitchNetworkConfig);
+
+            if (this.swIPAddr.toLowerCase() == ((SwitchNetworkConfig)arg0).getSwIPAddr().toLowerCase()) {
+                if (this.outPort == ((SwitchNetworkConfig)arg0).getOutPort()) {
+                    return 0;
+                } else if (this.outPort > ((SwitchNetworkConfig)arg0).getOutPort()) {
+                    return 1;
+                }
+            }
+
+            return -1;
+        }
+    }
+
+    private List<SwitchNetworkConfig> networkTopoConfig = new LinkedList<SwitchNetworkConfig>();
 
     // private IOFSwitch ofSwitch;
 
     // some defaults
-    // private final int AGENT_PORT = 6777;
-    static private final int DEFAULT_PORT = 2819;
-    static private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
+    private final int DEFAULT_PORT = 2819;
+    private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
+    private final int OF_MONITOR_INTERVAL = 5;
 
     public Master(){
-        networkManager = new NetworkManager();
+        // networkManager = new NetworkManager();
     }
 
     /**
@@ -95,7 +152,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     public void addUnrecordedAPAgent(final InetAddress ipv4Address) {
         String ipAddr = ipv4Address.getHostAddress();
 
-        APAgent agent = new APAgent(ipv4Address);
+        APAgent agent = new APAgent(ipv4Address, clientMap);
         apAgentMap.put(ipAddr, agent);
     }
 
@@ -260,6 +317,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
             String strLine;
 
+            // TODO now the config parser is quite simple, and can only handle
+            // the format which strictly follows our definition without any
+            // error
+
             /* Each line has the following format:
              *
              * Key value1 value2...
@@ -285,6 +346,20 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 }
                 String swIP = fields[1];
 
+                // outport
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after OFSwitchIP field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("OUTPORT")){
+                    log.error("A OFSwitchIP field should be followed by a OUTPORT field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                int outport = Integer.parseInt(fields[2]);
+
                 // APs
                 strLine = br.readLine();
                 if (strLine == null) {
@@ -293,7 +368,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 }
                 fields = strLine.split(" ");
                 if (!fields[0].equals("AP")){
-                    log.error("A OFSwitchIP field should be followed by a AP field");
+                    log.error("A OUTPORT field should be followed by a AP field");
                     log.error("Offending line: " + strLine);
                     System.exit(1);
                 }
@@ -302,14 +377,20 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                     log.error("Offending line: " + strLine);
                     System.exit(1);
                 }
-                if (networkTopoConfig.containsKey(swIP)) {
-                    log.warn("Redundent switch, ignore it");
-                    continue;
-                }
-                networkTopoConfig.put(swIP, new ArrayList<String>());
+
+                ArrayList<String> apList = new ArrayList<String>();
                 for (int i = 1; i < fields.length; i++) {
-                    networkTopoConfig.get(swIP).add(fields[i]);
+                    apList.add(fields[i]);
                 }
+
+                SwitchNetworkConfig swconfig = new SwitchNetworkConfig(swIP, outport, apList);
+
+                if (networkTopoConfig.contains(swconfig)) {
+                    log.error("Found dupliated switch network");
+                    System.exit(1);
+                }
+
+                networkTopoConfig.add(swconfig);
             }
 
             br.close();
@@ -328,7 +409,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         executor.execute(new ClickManageServer(this, port, executor));
 
         // Statistics
-        // executor.execute(new OFMonitor(this.floodlightProvider, executor, 6));
+        executor.execute(new OFMonitor(this.floodlightProvider, executor, OF_MONITOR_INTERVAL, swQueueList));
     }
 
 
@@ -386,10 +467,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
     @Override
     public void switchRemoved(long switchId) {
-        if (networkManager.containsSwitch(switchId)) {
-            networkManager.removeSwitch(switchId);
-        } else {
-            log.warn("Unrecording switch is removed");
+        for (SwitchOutQueue swqueue: swQueueList) {
+            if (swqueue.getSwId() == switchId) {
+                swQueueList.remove(swqueue);
+            }
         }
     }
 
@@ -400,21 +481,24 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         InetSocketAddress swInetAddr = (InetSocketAddress) sw.getInetAddress();
         String swInetAddrStr = swInetAddr.getAddress().getHostAddress();
 
-        if (networkTopoConfig.containsKey(swInetAddrStr)) {
-            // first time
-            if (!networkManager.containsSwitch(switchId)) {
-                List<APAgent> agentList = new ArrayList<APAgent>();
-                for (String agentInetAddr: networkTopoConfig.get(swInetAddrStr)) {
-                    APAgent agent = new APAgent(agentInetAddr, sw);
+        boolean isSwitchInConfig = false;
+        for (SwitchNetworkConfig sc: networkTopoConfig) {
+            if (sc.getSwIPAddr().toLowerCase().equals(swInetAddrStr.toLowerCase())) {
+                isSwitchInConfig = true;
+
+                List<APAgent> agentList = new LinkedList<APAgent>();
+                for (String agentInetAddr: sc.getAPList()) {
+                    APAgent agent = new APAgent(agentInetAddr, clientMap, sw);
                     apAgentMap.put(agentInetAddr, agent);
                     agentList.add(agent);
                 }
-                networkManager.putSwitch(switchId, agentList);
-            }
 
-        } else {
-            log.warn("Unrecording switch is connected and activated");
-            networkManager.putSwitch(switchId, new ArrayList<APAgent>());
+                swQueueList.add(new SwitchOutQueue(switchId, sc.getOutPort(), agentList));
+            }
+        }
+
+        if (!isSwitchInConfig) {
+            log.warn("Unrecording switch is connected and activated, ignore it!");
         }
     }
 

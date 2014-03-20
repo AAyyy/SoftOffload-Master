@@ -240,7 +240,7 @@ public class Client implements Comparable<Object> {
 
         Client that = (Client) obj;
 
-        return (this.hwAddress.equals(that.hwAddress));
+        return (this.hwAddress.equals(that.getMacAddress()));
     }
 
 
@@ -248,10 +248,10 @@ public class Client implements Comparable<Object> {
     public int compareTo(Object o) {
         assert (o instanceof Client);
 
-        if (this.hwAddress.toLong() == ((Client)o).hwAddress.toLong())
+        if (this.hwAddress.toLong() == ((Client)o).getMacAddress().toLong())
             return 0;
 
-        if (this.hwAddress.toLong() > ((Client)o).hwAddress.toLong())
+        if (this.hwAddress.toLong() > ((Client)o).getMacAddress().toLong())
             return 1;
 
         return -1;

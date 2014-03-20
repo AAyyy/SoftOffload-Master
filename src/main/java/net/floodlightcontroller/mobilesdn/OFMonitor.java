@@ -44,6 +44,8 @@ import org.openflow.protocol.Wildcards;
 import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.statistics.OFFlowStatisticsReply;
 import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
+import org.openflow.protocol.statistics.OFPortStatisticsReply;
+import org.openflow.protocol.statistics.OFPortStatisticsRequest;
 import org.openflow.protocol.statistics.OFStatistics;
 import org.openflow.protocol.statistics.OFStatisticsType;
 import org.slf4j.Logger;
@@ -68,30 +70,86 @@ public class OFMonitor implements Runnable {
     // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
     private long interval;
+    private List<SwitchOutQueue> swQueueList;
 
     // default max rate threshold
-    static private final float RATE_THRESHOLD = 30000;
+    static private final float RATE_THRESHOLD = 500000;
 
     // monitoring info is gathered by using a timer
-    private class PrintTask extends TimerTask {
+    private class OFMonitorTask extends TimerTask {
         public void run() {
-            printStatistics();
+            // flowStatistics();
+            portStatistics();
         }
     }
 
     public OFMonitor(IFloodlightProviderService fProvider,
-            ExecutorService executor, int printInterval) {
+            ExecutorService executor, int printInterval,
+            List<SwitchOutQueue> swList) {
         this.floodlightProvider = fProvider;
         // this.executor = executor;
         this.timer = new Timer();
         this.interval = (long)printInterval;
+        this.swQueueList = swList;
     }
 
 
     @Override
     public void run() {
         // start the timer with our task
-        timer.schedule(new PrintTask(), (long)2000, this.interval*1000);
+        timer.schedule(new OFMonitorTask(), (long)this.interval*1000, this.interval*1000);
+    }
+
+    private void portStatistics() {
+        List<OFStatistics> values = null;
+        Future<List<OFStatistics>> future;
+        OFPortStatisticsReply reply;
+
+        for (SwitchOutQueue swQueue: swQueueList) {
+            IOFSwitch sw = floodlightProvider.getSwitch(swQueue.getSwId());
+
+            OFStatisticsRequest req = new OFStatisticsRequest();
+            req.setStatisticType(OFStatisticsType.PORT);
+            int requestLength = req.getLengthU();
+            OFPortStatisticsRequest specificReq = new OFPortStatisticsRequest();
+            specificReq.setPortNumber((short)swQueue.getOutPort());
+            req.setStatistics(Collections.singletonList((OFStatistics)specificReq));
+            requestLength += specificReq.getLength();
+            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
+            requestLength += specificReq.getLength();
+            req.setLengthU(requestLength);
+
+            try {
+                // make the query
+                future = sw.queryStatistics(req);
+                values = future.get(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.error("Failure retrieving port statistics from switch " + sw, e);
+            }
+
+            if (values != null) {
+                for (OFStatistics stat: values) {
+
+                    reply = (OFPortStatisticsReply) stat;
+
+                    long receiveBytes = reply.getReceiveBytes();
+                    long transmitBytes = reply.getTransmitBytes();
+
+                    float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (float)(this.interval * 1000);
+                    float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (float)(this.interval * 1000);
+
+                    swQueue.setReceiveBytes(receiveBytes);
+                    swQueue.settransmitBytes(transmitBytes);
+
+                    System.out.println(receiveBytes);
+                    System.out.println(swQueue.getReceiveBytes());
+                    System.out.println(downrate);
+                    System.out.println(transmitBytes);
+                    System.out.println(swQueue.getTransmitBytes());
+                    System.out.println(uprate);
+                }
+            }
+        }
     }
 
 
@@ -106,7 +164,7 @@ public class OFMonitor implements Runnable {
     // only contains those four tuples
     // This might be a bug of Floodlight???
 
-    private void printStatistics() {
+    private void flowStatistics() {
         // statsReply = new ArrayList<OFFlowStatisticsReply>();
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
@@ -117,6 +175,7 @@ public class OFMonitor implements Runnable {
 
         // get switch
         Map<Long,IOFSwitch> swMap = floodlightProvider.getAllSwitchMap();
+
 
         for (IOFSwitch sw: swMap.values()) {
             try {
@@ -136,6 +195,7 @@ public class OFMonitor implements Runnable {
                 // make the query
                 future = sw.queryStatistics(req);
                 values = future.get(3, TimeUnit.SECONDS);
+
                 if (values != null) {
                     for (OFStatistics stat: values) {
                         // statsReply.add((OFFlowStatisticsReply) stat);
@@ -145,6 +205,7 @@ public class OFMonitor implements Runnable {
                                   / ((float) reply.getDurationSeconds()
                                   + ((float) reply.getDurationNanoseconds() / 1000000000));
                         match = reply.getMatch();
+
                         // actions list is empty means the current flow action is to drop
                         if (rate >= RATE_THRESHOLD && !reply.getActions().isEmpty()) {
 
@@ -165,7 +226,7 @@ public class OFMonitor implements Runnable {
 
 
             } catch (Exception e) {
-                log.error("Failure retrieving statistics from switch " + sw, e);
+                log.error("Failure retrieving flow statistics from switch " + sw, e);
             }
         }
     }

@@ -58,11 +58,10 @@ public class APAgent {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
+    private Map<String, Client> clientMap;
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
 
-    private Map<String, Client> clientMap
-        = new ConcurrentHashMap<String, Client> ();
 
     // defaults
     private final int AGENT_PORT = 6777;
@@ -70,8 +69,9 @@ public class APAgent {
     static private final int MAX_LEN = 512;
 
 
-    public APAgent(InetAddress ipAddr) {
+    public APAgent(InetAddress ipAddr, Map<String, Client> cMap) {
         this.ipAddress = ipAddr;
+        clientMap = cMap;
         try {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
@@ -80,7 +80,9 @@ public class APAgent {
         }
     }
 
-    public APAgent(String ipAddr) {
+    public APAgent(String ipAddr, Map<String, Client> cMap) {
+        clientMap = cMap;
+
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
             this.agentSocket = new DatagramSocket();
@@ -93,8 +95,9 @@ public class APAgent {
         }
     }
 
-    public APAgent(InetAddress ipAddr, IOFSwitch sw) {
+    public APAgent(InetAddress ipAddr, Map<String, Client> cMap, IOFSwitch sw) {
         this.ipAddress = ipAddr;
+        this.clientMap = cMap;
         this.ofSwitch = sw;
         try {
             this.agentSocket = new DatagramSocket();
@@ -104,8 +107,9 @@ public class APAgent {
         }
     }
 
-    public APAgent(String ipAddr, IOFSwitch sw) {
+    public APAgent(String ipAddr, Map<String, Client> cMap, IOFSwitch sw) {
 
+        this.clientMap = cMap;
         this.ofSwitch = sw;
 
         try {

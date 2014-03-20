@@ -129,24 +129,30 @@ public class OFMonitor implements Runnable {
 
             if (values != null) {
                 for (OFStatistics stat: values) {
-
                     reply = (OFPortStatisticsReply) stat;
 
                     long receiveBytes = reply.getReceiveBytes();
                     long transmitBytes = reply.getTransmitBytes();
 
-                    float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (float)(this.interval * 1000);
-                    float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (float)(this.interval * 1000);
+                    if (swQueue.isBytesUpdated) {
+                        float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (float)(this.interval * 1000);
+                        float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (float)(this.interval * 1000);
 
-                    swQueue.setReceiveBytes(receiveBytes);
-                    swQueue.settransmitBytes(transmitBytes);
+                        swQueue.setReceiveBytes(receiveBytes);
+                        swQueue.settransmitBytes(transmitBytes);
 
-                    System.out.println(receiveBytes);
-                    System.out.println(swQueue.getReceiveBytes());
-                    System.out.println(downrate);
-                    System.out.println(transmitBytes);
-                    System.out.println(swQueue.getTransmitBytes());
-                    System.out.println(uprate);
+                        System.out.println(receiveBytes);
+                        System.out.println(swQueue.getReceiveBytes());
+                        System.out.println(downrate);
+                        System.out.println(transmitBytes);
+                        System.out.println(swQueue.getTransmitBytes());
+                        System.out.println(uprate);
+                    } else {
+                        swQueue.setReceiveBytes(receiveBytes);
+                        swQueue.settransmitBytes(transmitBytes);
+                        swQueue.isBytesUpdated = true;
+                    }
+
                 }
             }
         }

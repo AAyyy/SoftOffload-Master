@@ -12,10 +12,12 @@ import net.floodlightcontroller.mobilesdn.Master.SwitchNetworkConfig;
  *
  */
 public class SwitchOutQueue implements Comparable<Object> {
+    public boolean isBytesUpdated = false;  // used by OFMonitor
+
     private long swId;
     private int outPort;
-    private long receiveBytes = 0;
-    private long transmitBytes = 0;
+    private long receiveBytes = 0;    // init value
+    private long transmitBytes = 0;   // init value
     private List<APAgent> apList;
 
     public SwitchOutQueue(long id, int port, List<APAgent> ap) {

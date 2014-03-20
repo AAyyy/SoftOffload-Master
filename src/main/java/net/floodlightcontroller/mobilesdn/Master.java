@@ -481,10 +481,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         InetSocketAddress swInetAddr = (InetSocketAddress) sw.getInetAddress();
         String swInetAddrStr = swInetAddr.getAddress().getHostAddress();
 
-        boolean isSwitchInConfig = false;
+        boolean hasSwitchInConfig = false;
         for (SwitchNetworkConfig sc: networkTopoConfig) {
             if (sc.getSwIPAddr().toLowerCase().equals(swInetAddrStr.toLowerCase())) {
-                isSwitchInConfig = true;
+                hasSwitchInConfig = true;
 
                 List<APAgent> agentList = new LinkedList<APAgent>();
                 for (String agentInetAddr: sc.getAPList()) {
@@ -497,7 +497,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             }
         }
 
-        if (!isSwitchInConfig) {
+        if (!hasSwitchInConfig) {
             log.warn("Unrecording switch is connected and activated, ignore it!");
         }
     }

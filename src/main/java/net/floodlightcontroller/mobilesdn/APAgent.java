@@ -56,9 +56,12 @@ public class APAgent {
     protected static Logger log = LoggerFactory.getLogger(APAgent.class);
 
     private InetAddress ipAddress;
+    private String ssid;
+    private String bssid;
+
     private float upRate;
     private float downRate;
-    private Map<String, Client> clientMap;
+    private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
 
@@ -69,9 +72,9 @@ public class APAgent {
     static private final int MAX_LEN = 512;
 
 
-    public APAgent(InetAddress ipAddr, Map<String, Client> cMap) {
+    public APAgent(InetAddress ipAddr) {
         this.ipAddress = ipAddr;
-        clientMap = cMap;
+
         try {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
@@ -80,8 +83,7 @@ public class APAgent {
         }
     }
 
-    public APAgent(String ipAddr, Map<String, Client> cMap) {
-        clientMap = cMap;
+    public APAgent(String ipAddr) {
 
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
@@ -95,10 +97,12 @@ public class APAgent {
         }
     }
 
-    public APAgent(InetAddress ipAddr, Map<String, Client> cMap, IOFSwitch sw) {
+    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b) {
         this.ipAddress = ipAddr;
-        this.clientMap = cMap;
         this.ofSwitch = sw;
+        this.ssid = s;
+        this.bssid = b;
+
         try {
             this.agentSocket = new DatagramSocket();
         } catch (SocketException e) {
@@ -107,10 +111,11 @@ public class APAgent {
         }
     }
 
-    public APAgent(String ipAddr, Map<String, Client> cMap, IOFSwitch sw) {
+    public APAgent(String ipAddr, IOFSwitch sw, String s, String b) {
 
-        this.clientMap = cMap;
         this.ofSwitch = sw;
+        this.ssid = s;
+        this.bssid = b;
 
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
@@ -178,6 +183,22 @@ public class APAgent {
      */
     public void setSwitch(IOFSwitch sw) {
         this.ofSwitch = sw;
+    }
+
+    public String getSSID() {
+        return this.ssid;
+    }
+
+    public String getBSSID() {
+        return this.bssid;
+    }
+
+    public void setSSID(String s) {
+        ssid = s;
+    }
+
+    public void setBSSID(String b) {
+        bssid = b;
     }
 
 

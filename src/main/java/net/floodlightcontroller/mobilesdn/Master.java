@@ -31,6 +31,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.openflow.protocol.OFMatch;
@@ -67,38 +68,29 @@ import net.floodlightcontroller.util.MACAddress;
  **/
 
 public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchListener, IOFMessageListener{
-    protected static Logger log = LoggerFactory.getLogger(Master.class);
-    // protected IRestApiService restApi;
 
-    private IFloodlightProviderService floodlightProvider;
-    private ScheduledExecutorService executor;
 
-    // private NetworkManager networkManager;
-    private Map<String, APAgent> apAgentMap = new ConcurrentHashMap<String, APAgent>();
-    private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
-    private List<SwitchOutQueue> swQueueList = new LinkedList<SwitchOutQueue>();
+    private static class APConfig {
+        public String ipAddr;
+        public String ssid;
+        public String bssid;
 
-    public class SwitchNetworkConfig implements Comparable<Object> {
-        private String swIPAddr;
-        private int outPort;
-        private List<String> apList;
+        public APConfig(String ip, String s, String b) {
+            ipAddr = ip;
+            ssid = s;
+            bssid = b;
+        }
+    }
+
+    private static class SwitchNetworkConfig implements Comparable<Object> {
+        public String swIPAddr;
+        public int outPort;
+        public List<String> apList;
 
         public SwitchNetworkConfig(String ip, int port, List<String> ap) {
             swIPAddr = ip;
             outPort = port;
             apList = ap;
-        }
-
-        public String getSwIPAddr() {
-            return swIPAddr;
-        }
-
-        public int getOutPort() {
-            return outPort;
-        }
-
-        public List<String> getAPList() {
-            return apList;
         }
 
         @Override
@@ -111,18 +103,18 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
             SwitchNetworkConfig that = (SwitchNetworkConfig) obj;
 
-            return (this.swIPAddr.toLowerCase().equals(that.getSwIPAddr().toLowerCase())
-                    && this.outPort == that.getOutPort());
+            return (this.swIPAddr.toLowerCase().equals(that.swIPAddr.toLowerCase())
+                    && this.outPort == that.outPort);
         }
 
         @Override
         public int compareTo(Object arg0) {
             assert (arg0 instanceof SwitchNetworkConfig);
 
-            if (this.swIPAddr.toLowerCase() == ((SwitchNetworkConfig)arg0).getSwIPAddr().toLowerCase()) {
-                if (this.outPort == ((SwitchNetworkConfig)arg0).getOutPort()) {
+            if (this.swIPAddr.toLowerCase() == ((SwitchNetworkConfig)arg0).swIPAddr.toLowerCase()) {
+                if (this.outPort == ((SwitchNetworkConfig)arg0).outPort) {
                     return 0;
-                } else if (this.outPort > ((SwitchNetworkConfig)arg0).getOutPort()) {
+                } else if (this.outPort > ((SwitchNetworkConfig)arg0).outPort) {
                     return 1;
                 }
             }
@@ -131,14 +123,25 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         }
     }
 
+    protected static Logger log = LoggerFactory.getLogger(Master.class);
+    // protected IRestApiService restApi;
+
+    private IFloodlightProviderService floodlightProvider;
+    private ScheduledExecutorService executor;
+
+    // private NetworkManager networkManager;
+    private Map<String, APAgent> apAgentMap = new ConcurrentHashMap<String, APAgent>();
+    private List<SwitchOutQueue> swQueueList = new CopyOnWriteArrayList<SwitchOutQueue>();
     private List<SwitchNetworkConfig> networkTopoConfig = new LinkedList<SwitchNetworkConfig>();
+    private Map<String, APConfig> apConfigMap = new HashMap<String, APConfig>();
 
     // private IOFSwitch ofSwitch;
 
     // some defaults
     private final int DEFAULT_PORT = 2819;
     private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
-    private final int OF_MONITOR_INTERVAL = 5;
+    private final String DEFAULT_AP_CONFIG = "apConfig";
+    private final float OF_MONITOR_INTERVAL = 2.0f;
 
     public Master(){
         // networkManager = new NetworkManager();
@@ -150,9 +153,24 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
      * @param ipv4Address Client's IPv4 address
      */
     public void addUnrecordedAPAgent(final InetAddress ipv4Address) {
-        String ipAddr = ipv4Address.getHostAddress();
 
-        APAgent agent = new APAgent(ipv4Address, clientMap);
+        String ssid;
+        String bssid;
+        String ipAddr = ipv4Address.getHostAddress();
+        APAgent agent = new APAgent(ipv4Address);
+
+
+        if (apConfigMap.containsKey(ipAddr)) {
+            ssid = apConfigMap.get(ipAddr).ssid;
+            bssid = apConfigMap.get(ipAddr).bssid;
+        } else {
+            ssid = "";
+            bssid = "";
+            log.warn("Unconfiged AP found, initialize it without SSID and BSSID");
+        }
+
+        agent.setSSID(ssid);
+        agent.setBSSID(bssid);
         apAgentMap.put(ipAddr, agent);
     }
 
@@ -306,15 +324,34 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         // network topology config
         String networkTopoFile = DEFAULT_TOPOLOGY_FILE;
         String networkTopoFileConfig = configOptions.get("networkFile");
-
         if (networkTopoFileConfig != null) {
             networkTopoFile = networkTopoFileConfig;
         }
+        parseNetworkConfig(networkTopoFile);
+
+        // ap config
+        String apConfigPath = DEFAULT_AP_CONFIG;
+        String apConfig = configOptions.get("apConfig");
+        if (apConfig != null) {
+            apConfigPath = apConfig;
+        }
+        parseAPConfig (apConfigPath);
+
+
+        IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
+        executor = tp.getScheduledExecutor();
+        // Spawn threads for different services
+        executor.execute(new ClickManageServer(this, port, executor));
+
+        // Statistics
+        executor.execute(new OFMonitor(this.floodlightProvider, executor, OF_MONITOR_INTERVAL, swQueueList));
+    }
+
+    private void parseNetworkConfig(String networkTopoFile) {
 
         try {
 
             BufferedReader br = new BufferedReader (new FileReader(networkTopoFile));
-
             String strLine;
 
             // TODO now the config parser is quite simple, and can only handle
@@ -353,12 +390,17 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                     System.exit(1);
                 }
                 fields = strLine.split(" ");
-                if (!fields[0].equals("OUTPORT")){
+                if (!fields[0].equals("OutPort")){
                     log.error("A OFSwitchIP field should be followed by a OUTPORT field");
                     log.error("Offending line: " + strLine);
                     System.exit(1);
                 }
-                int outport = Integer.parseInt(fields[2]);
+                if (fields.length == 1) {
+                    log.error("No port value is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                int outport = Integer.parseInt(fields[1]);
 
                 // APs
                 strLine = br.readLine();
@@ -402,14 +444,86 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             e.printStackTrace();
             System.exit(1);
         }
+    }
 
-        IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
-        executor = tp.getScheduledExecutor();
-        // Spawn threads for different services
-        executor.execute(new ClickManageServer(this, port, executor));
+    private void parseAPConfig (String apConfigPath) {
 
-        // Statistics
-        executor.execute(new OFMonitor(this.floodlightProvider, executor, OF_MONITOR_INTERVAL, swQueueList));
+        try {
+            BufferedReader br = new BufferedReader (new FileReader(apConfigPath));
+            String strLine;
+
+            while ((strLine = br.readLine()) != null) {
+                if (strLine.startsWith("#")) // comment
+                    continue;
+
+                if (strLine.length() == 0) // blank line
+                    continue;
+
+                // Managed IP Address
+                String [] fields = strLine.split(" ");
+                if (!fields[0].equals("ManagedIP")) {
+                    log.error("Missing ManagedIP field " + fields[0]);
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length != 2) {
+                    log.error("A ManagedIP field should specify a single string as IP address");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                String ip = fields[1];
+
+                // SSID
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after ManagedIP field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ", 2);
+                if (!fields[0].equals("SSID")){
+                    log.error("A ManagedIP field should be followed by a SSID field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("No SSID is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                String ssid = fields[1];
+
+                // BSSID
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after OFSwitchIP field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("BSSID")){
+                    log.error("A SSID field should be followed by a BSSID field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("No BSSID is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                String bssid = fields[1];
+
+                apConfigMap.put(ip, new APConfig(ip, ssid, bssid));
+            }
+
+            br.close();
+
+        } catch (FileNotFoundException e) {
+            log.error("AP config is not found. Terminating.");
+            System.exit(1);
+        } catch (IOException e) {
+            log.error("Failed to read AP config. Terminating.");
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 
 
@@ -467,10 +581,16 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
     @Override
     public void switchRemoved(long switchId) {
+        List<SwitchOutQueue> tempList = new LinkedList<SwitchOutQueue>();
+
         for (SwitchOutQueue swqueue: swQueueList) {
             if (swqueue.getSwId() == switchId) {
-                swQueueList.remove(swqueue);
+                tempList.add(swqueue);
             }
+        }
+
+        for (SwitchOutQueue sw: tempList) {
+            swQueueList.remove(sw);
         }
     }
 
@@ -483,17 +603,26 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
         boolean hasSwitchInConfig = false;
         for (SwitchNetworkConfig sc: networkTopoConfig) {
-            if (sc.getSwIPAddr().toLowerCase().equals(swInetAddrStr.toLowerCase())) {
+            if (sc.swIPAddr.toLowerCase().equals(swInetAddrStr.toLowerCase())) {
                 hasSwitchInConfig = true;
 
                 List<APAgent> agentList = new LinkedList<APAgent>();
-                for (String agentInetAddr: sc.getAPList()) {
-                    APAgent agent = new APAgent(agentInetAddr, clientMap, sw);
-                    apAgentMap.put(agentInetAddr, agent);
-                    agentList.add(agent);
+                for (String agentInetAddr: sc.apList) {
+                    if (apConfigMap.containsKey(agentInetAddr)) {
+                        APConfig apConfig = apConfigMap.get(agentInetAddr);
+                        APAgent agent = new APAgent(agentInetAddr, sw, apConfig.ssid, apConfig.bssid);
+                        apAgentMap.put(agentInetAddr, agent);
+                        agentList.add(agent);
+                    } else {
+                        log.warn("Unconfiged AP found with siwtch " + swInetAddrStr);
+                        log.warn("Initialize AP " + agentInetAddr + " without SSID and BSSID");
+                        APAgent agent = new APAgent(agentInetAddr, sw, "", "");
+                        apAgentMap.put(agentInetAddr, agent);
+                        agentList.add(agent);
+                    }
                 }
 
-                swQueueList.add(new SwitchOutQueue(switchId, sc.getOutPort(), agentList));
+                swQueueList.add(new SwitchOutQueue(switchId, sc.outPort, agentList));
             }
         }
 
@@ -514,7 +643,6 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         // TODO Auto-generated method stub
 
     }
-
 
 
 }

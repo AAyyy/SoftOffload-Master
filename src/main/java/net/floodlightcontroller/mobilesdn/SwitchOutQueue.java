@@ -5,8 +5,6 @@ package net.floodlightcontroller.mobilesdn;
 
 import java.util.List;
 
-import net.floodlightcontroller.mobilesdn.Master.SwitchNetworkConfig;
-
 /**
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
@@ -84,9 +82,9 @@ public class SwitchOutQueue implements Comparable<Object> {
         assert (arg0 instanceof SwitchOutQueue);
 
         if (this.swId == ((SwitchOutQueue)arg0).getSwId()) {
-            if (this.outPort == ((SwitchNetworkConfig)arg0).getOutPort()) {
+            if (this.outPort == ((SwitchOutQueue)arg0).getOutPort()) {
                 return 0;
-            } else if (this.outPort > ((SwitchNetworkConfig)arg0).getOutPort()) {
+            } else if (this.outPort > ((SwitchOutQueue)arg0).getOutPort()) {
                 return 1;
             }
         }

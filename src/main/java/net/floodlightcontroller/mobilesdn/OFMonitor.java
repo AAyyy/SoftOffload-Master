@@ -69,7 +69,7 @@ public class OFMonitor implements Runnable {
 
     // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
-    private long interval;
+    private float interval;
     private List<SwitchOutQueue> swQueueList;
 
     // default max rate threshold
@@ -83,13 +83,12 @@ public class OFMonitor implements Runnable {
         }
     }
 
-    public OFMonitor(IFloodlightProviderService fProvider,
-            ExecutorService executor, int printInterval,
-            List<SwitchOutQueue> swList) {
+    public OFMonitor(IFloodlightProviderService fProvider, ExecutorService executor,
+            float printInterval, List<SwitchOutQueue> swList) {
         this.floodlightProvider = fProvider;
         // this.executor = executor;
         this.timer = new Timer();
-        this.interval = (long)printInterval;
+        this.interval = printInterval;
         this.swQueueList = swList;
     }
 
@@ -97,7 +96,7 @@ public class OFMonitor implements Runnable {
     @Override
     public void run() {
         // start the timer with our task
-        timer.schedule(new OFMonitorTask(), (long)this.interval*1000, this.interval*1000);
+        timer.schedule(new OFMonitorTask(), (long)5000, (long)this.interval*1000);
     }
 
     private void portStatistics() {
@@ -115,9 +114,9 @@ public class OFMonitor implements Runnable {
             specificReq.setPortNumber((short)swQueue.getOutPort());
             req.setStatistics(Collections.singletonList((OFStatistics)specificReq));
             requestLength += specificReq.getLength();
-            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-            requestLength += specificReq.getLength();
             req.setLengthU(requestLength);
+
+
 
             try {
                 // make the query
@@ -135,18 +134,17 @@ public class OFMonitor implements Runnable {
                     long transmitBytes = reply.getTransmitBytes();
 
                     if (swQueue.isBytesUpdated) {
-                        float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (float)(this.interval * 1000);
-                        float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (float)(this.interval * 1000);
+                        float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
+                        float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
+
+                        System.out.print("Received bytes: ");
+                        System.out.println(receiveBytes);
+                        System.out.print("Previouw value: ");
+                        System.out.println(swQueue.getReceiveBytes());
+                        System.out.println(downrate);
 
                         swQueue.setReceiveBytes(receiveBytes);
                         swQueue.settransmitBytes(transmitBytes);
-
-                        System.out.println(receiveBytes);
-                        System.out.println(swQueue.getReceiveBytes());
-                        System.out.println(downrate);
-                        System.out.println(transmitBytes);
-                        System.out.println(swQueue.getTransmitBytes());
-                        System.out.println(uprate);
                     } else {
                         swQueue.setReceiveBytes(receiveBytes);
                         swQueue.settransmitBytes(transmitBytes);

@@ -44,6 +44,7 @@ class ClickManageServer implements Runnable {
     private final String MSG_AGENT_RATE = "agentrate";
     private final String MSG_CLIENT_RATE = "clientrate";
     private final String MSG_CLIENT_DISCONNECT = "clientdisconnect";
+    private final String MSG_CLIENT_SCAN = "scan";
 
     private final int SERVER_PORT;
 
@@ -143,6 +144,10 @@ class ClickManageServer implements Runnable {
                 final String clientEthAddr = fields[1];
 
                 clientDisconnect(agentAddr, clientEthAddr);
+            } else if (msg_type.equals(MSG_CLIENT_SCAN)) {
+                for (int i = 1; i < fields.length; i++) {
+                    System.out.println(fields[i]);
+                }
             }
 
         }

@@ -320,7 +320,7 @@ public class APAgent {
         try {
             this.agentSocket.send(packet);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
+            log.error("can not send udp message to agent: " + message);
             e.printStackTrace();
         }
     }
@@ -332,7 +332,7 @@ public class APAgent {
         try {
             this.agentSocket.send(packet);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
+            log.error("can not send udp message to agent: " + message.toString());
             e.printStackTrace();
         }
     }
@@ -356,8 +356,9 @@ public class APAgent {
      *
      * @param clientEthAddr, client MAC address in the messages
      * @param clientIpAddr, client IPv4 address
+     * @return client, client instance corresponding to this info
      */
-    void receiveClientInfo(final String clientEthAddr, final String clientIpAddr) {
+    Client receiveClientInfo(final String clientEthAddr, final String clientIpAddr) {
 
         String mac = clientEthAddr.toLowerCase();
 
@@ -376,10 +377,13 @@ public class APAgent {
 
                 log.info("Connected to new client {} -- {}, initializing it...",
                         clientEthAddr, clientIpAddr);
+                return client;
             }
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
+
+        return null;
     }
 
     /**

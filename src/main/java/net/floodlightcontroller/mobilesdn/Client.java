@@ -52,8 +52,8 @@ public class Client implements Comparable<Object> {
     // defaults
     static private final long SECONDS = 3 * 60 * 1000;
 
-    private void initializeClient(APAgent agt) {
-        agent = agt;
+    private void initializeClientTimer() {
+
         switchTimer = new Timer();    // set the timer
 
         switchTimer.schedule(new TimerTask() {
@@ -85,8 +85,9 @@ public class Client implements Comparable<Object> {
     public Client(MACAddress hwAddress, InetAddress ipAddress, APAgent agt) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
+        this.agent = agt;
 
-        initializeClient(agt);
+        // initializeClientTimer();
     }
 
     /**
@@ -98,8 +99,9 @@ public class Client implements Comparable<Object> {
     public Client(String hwAddress, String ipAddress, APAgent agt) throws UnknownHostException {
         this.hwAddress = MACAddress.valueOf(hwAddress);
         this.ipAddress = InetAddress.getByName(ipAddress);
+        this.agent = agt;
 
-        initializeClient(agt);
+        // initializeClientTimer();
     }
 
     /**
@@ -112,7 +114,9 @@ public class Client implements Comparable<Object> {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
         this.ofSwitch = sw;
-        initializeClient(agt);
+        this.agent = agt;
+
+        // initializeClientTimer();
     }
 
     /**
@@ -125,7 +129,9 @@ public class Client implements Comparable<Object> {
         this.hwAddress = MACAddress.valueOf(hwAddress);
         this.ipAddress = InetAddress.getByName(ipAddress);
         this.ofSwitch = sw;
-        initializeClient(agt);
+        this.agent = agt;
+
+        // initializeClientTimer();
     }
 
     /**
@@ -208,6 +214,14 @@ public class Client implements Comparable<Object> {
      */
     public void setSwitch(IOFSwitch sw) {
         this.ofSwitch = sw;
+    }
+
+    /**
+     * Get the client's corresponding AP Agent.
+     * @return
+     */
+    public APAgent getAgent() {
+        return agent;
     }
 
     /**

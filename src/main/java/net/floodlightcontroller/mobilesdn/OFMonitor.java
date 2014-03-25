@@ -65,7 +65,7 @@ public class OFMonitor implements Runnable {
     protected static Logger log = LoggerFactory.getLogger(OFMonitor.class);
 
     private IFloodlightProviderService floodlightProvider;
-    // private final ExecutorService executor;
+    private Master master;
 
     // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
@@ -83,10 +83,11 @@ public class OFMonitor implements Runnable {
         }
     }
 
-    public OFMonitor(IFloodlightProviderService fProvider, ExecutorService executor,
+    public OFMonitor(IFloodlightProviderService fProvider, Master m,
             float printInterval, List<SwitchOutQueue> swList) {
         this.floodlightProvider = fProvider;
-        // this.executor = executor;
+        this.master = m;
+
         this.timer = new Timer();
         this.interval = printInterval;
         this.swQueueList = swList;
@@ -135,21 +136,26 @@ public class OFMonitor implements Runnable {
 
                     if (swQueue.isBytesUpdated) {
                         float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
-                        float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
+                        // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
 
-                        System.out.print("Received bytes: ");
-                        System.out.println(receiveBytes);
-                        System.out.print("Previouw value: ");
-                        System.out.println(swQueue.getReceiveBytes());
-                        System.out.println(downrate);
+                        if (downrate > 1000000) {
+                           int num = swQueue.getDownThroughputOverNum();
+                           swQueue.setDownThroughputOverNum(++num);
+                        } else {
+                            swQueue.setDownThroughputOverNum(0);
+                        }
 
-                        swQueue.setReceiveBytes(receiveBytes);
-                        swQueue.settransmitBytes(transmitBytes);
+                        if (swQueue.getDownThroughputOverNum() >= 10) {
+                            master.switchQueueManagement(sw, swQueue);
+                            swQueue.setDownThroughputOverNum(0);
+                        }
+
                     } else {
-                        swQueue.setReceiveBytes(receiveBytes);
-                        swQueue.settransmitBytes(transmitBytes);
                         swQueue.isBytesUpdated = true;
                     }
+
+                    swQueue.setReceiveBytes(receiveBytes);
+                    swQueue.settransmitBytes(transmitBytes);
 
                 }
             }

@@ -70,7 +70,7 @@ class ClickManageServer implements Runnable {
         while(true)	{
 
             try {
-                final byte[] receiveData = new byte[1024]; // We can probably live with less
+                final byte[] receiveData = new byte[1280]; // probably this could be smaller
                 final DatagramPacket receivedPacket = new DatagramPacket(receiveData, receiveData.length);
                 controllerSocket.receive(receivedPacket);
 

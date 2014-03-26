@@ -196,6 +196,10 @@ public class OFMonitor implements Runnable {
                 specificReq.setMatch(new OFMatch().setWildcards(Wildcards.FULL));
                 specificReq.setTableId((byte)0xff);
 
+                // FIXME match bug
+                // for example, this can not work here
+                // match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE)
+
                 // using OFPort.OFPP_NONE(0xffff) as the outport
                 specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
                 req.setStatistics(Collections.singletonList((OFStatistics) specificReq));

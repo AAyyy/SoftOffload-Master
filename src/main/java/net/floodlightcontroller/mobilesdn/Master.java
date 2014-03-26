@@ -44,6 +44,7 @@ import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.Wildcards;
+import org.openflow.protocol.Wildcards.Flag;
 import org.openflow.protocol.statistics.OFFlowStatisticsReply;
 import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
 import org.openflow.protocol.statistics.OFStatistics;
@@ -289,7 +290,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     }
 
 
-    public void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
+    void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
@@ -299,7 +300,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             req.setStatisticType(OFStatisticsType.FLOW);
             int requestLength = req.getLengthU();
             OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-            specificReq.setMatch(new OFMatch().setWildcards(Wildcards.FULL).setInputPort((short)swQueue.getOutPort()));
+            OFMatch mPattern = new OFMatch();
+            mPattern.setWildcards(Wildcards.FULL.matchOn(Flag.IN_PORT));
+            mPattern.setInputPort((short)swQueue.getOutPort());
+            specificReq.setMatch(mPattern);
             specificReq.setTableId((byte)0xff);
 
             // using OFPort.OFPP_NONE(0xffff) as the outport
@@ -336,16 +340,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                         APAgent agent = allClientMap.get(mac).getAgent();
                         if (agent != null) {
                             // set up message data
-                            byte[] m = macAddr.toBytes();
-                            byte[] b1 = "c".getBytes();
-                            byte[] b2 = "scan".getBytes();
-
-                            byte[] message = new byte[b1.length + b2.length + m.length];
-
-                            System.arraycopy(b1, 0, message, 0, b1.length);
-                            System.arraycopy(m, 0, message, b1.length, m.length);
-                            System.arraycopy(b2, 0, message, b1.length + m.length, b2.length);
-
+                            byte[] message = makeByteMessageToClient(macAddr, "c", "scan");
                             agent.send(message);
                             log.info("Send message to agent for client scanning");
                         }
@@ -354,6 +349,42 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             }
         } catch (Exception e) {
             log.error("Failure retrieving flow statistics from switch " + sw, e);
+        }
+    }
+
+    private byte[] makeByteMessageToClient(MACAddress mac, String signal, String data) {
+        byte[] m = mac.toBytes();
+        byte[] b1 = signal.getBytes();
+        byte[] b2 = data.getBytes();
+
+        byte[] message = new byte[b1.length + b2.length + m.length];
+
+        System.arraycopy(b1, 0, message, 0, b1.length);
+        System.arraycopy(m, 0, message, b1.length, m.length);
+        System.arraycopy(b2, 0, message, b1.length + m.length, b2.length);
+
+        return message;
+    }
+
+    void receiveScanResult(String[] fields) {
+
+        log.info("received scan result from " + fields[1]);
+        MACAddress macAddr = MACAddress.valueOf(fields[1]);
+
+        for (int i = 2; i < fields.length; i++) {
+            String[] info = fields[i].split("&");
+            int strength = Integer.parseInt(info[2]);
+
+            if (info[0].equals("sdntest1") && strength > -90) {
+                for (Client clt: allClientMap.values()) {
+                    if (clt.getMacAddress().toString().toLowerCase().equals(fields[1].toLowerCase())) {
+                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] + "|open|\n");
+                        clt.getAgent().send(msg);
+                        log.info("ask client (" + fields[1] + ") to switch to sdntest1");
+                        return;
+                    }
+                }
+            }
         }
     }
 

@@ -108,6 +108,10 @@ class ClickManageServer implements Runnable {
         master.clientDisconnect(agentAddr, clientEthAddr);
     }
 
+    private void receiveScanResult(String[] fields) {
+        master.receiveScanResult(fields);
+    }
+
     private class ConnectionHandler implements Runnable {
         final DatagramPacket receivedPacket;
 
@@ -118,7 +122,7 @@ class ClickManageServer implements Runnable {
         // AP Agent message handler
         public void run() {
             final String msg = new String(receivedPacket.getData()).trim().toLowerCase();
-            final String[] fields = msg.split(" ");
+            final String[] fields = msg.split("\\|");
             final String msg_type = fields[0];
             final InetAddress agentAddr = receivedPacket.getAddress();
 
@@ -145,9 +149,7 @@ class ClickManageServer implements Runnable {
 
                 clientDisconnect(agentAddr, clientEthAddr);
             } else if (msg_type.equals(MSG_CLIENT_SCAN)) {
-                for (int i = 1; i < fields.length; i++) {
-                    System.out.println(fields[i]);
-                }
+                receiveScanResult(fields);
             }
 
         }

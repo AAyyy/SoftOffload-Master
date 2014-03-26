@@ -271,7 +271,7 @@ public class APAgent {
         String clientMac = client.getMacAddress().toString().toLowerCase();
 
         if (clientMap.containsKey(clientMac)) {
-            clientMap.get(clientMac).cancelTask();
+            // clientMap.get(clientMac).cancelTask();
             clientMap.remove(clientMac);
         }
     }
@@ -285,7 +285,7 @@ public class APAgent {
         String mac = clientMac.toLowerCase();
 
         if (clientMap.containsKey(mac)) {
-            clientMap.get(mac).cancelTask();
+            // clientMap.get(mac).cancelTask();
             clientMap.remove(mac);
         }
     }
@@ -295,9 +295,9 @@ public class APAgent {
      *
      */
     public void removeAllClients() {
-        for (Client i: clientMap.values()) {
-            i.cancelTask();
-        }
+        // for (Client i: clientMap.values()) {
+        //     i.cancelTask();
+        // }
 
         clientMap.clear();
     }

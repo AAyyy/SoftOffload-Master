@@ -148,6 +148,8 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     private Map<String, APConfig> apConfigMap = new HashMap<String, APConfig>();
     private Map<String, Client> allClientMap = new ConcurrentHashMap<String, Client>();
 
+    private List<Client> offloadingCandidates = new CopyOnWriteArrayList<Client>();
+
     // private IOFSwitch ofSwitch;
 
     // some defaults
@@ -207,7 +209,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
      * @param clientEthAddr
      * @param clientIpAddr
      */
-    void receiveClientInfo(final InetAddress agentAddr,
+    synchronized void receiveClientInfo(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr) {
 
         log.info("Client message from " + agentAddr.getHostAddress() + ": " +
@@ -233,7 +235,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
      *
      * @param AgentAddr
      */
-    void clientDisconnect(final InetAddress agentAddr,
+    synchronized void clientDisconnect(final InetAddress agentAddr,
             final String clientEthAddr) {
 
         log.info("Client " + clientEthAddr + " disconnected from agent "
@@ -289,7 +291,6 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
     }
 
-
     void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
@@ -317,35 +318,56 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             values = future.get(2, TimeUnit.SECONDS);
 
             if (values != null) {
-                float maxRate = 0;
                 OFMatch match = null;
+                Map<Double, OFMatch> rateMap = new HashMap<Double, OFMatch>();
+                List<Double> rateList = new ArrayList<Double>();
 
                 for (OFStatistics stat: values) {
                     // statsReply.add((OFFlowStatisticsReply) stat);
 
                     reply = (OFFlowStatisticsReply) stat;
-                    float rate = (float) reply.getByteCount()
-                                  / ((float) reply.getDurationSeconds()
-                                  + ((float) reply.getDurationNanoseconds() / 1000000000));
-                    if (rate > maxRate && !reply.getActions().isEmpty()) {
-                        maxRate = rate;
+                    double rate = reply.getByteCount()
+                                  / ((double) reply.getDurationSeconds()
+                                  + ((double) reply.getDurationNanoseconds() / 1000000000));
+                    if (!reply.getActions().isEmpty() && rate > 0) {
                         match = reply.getMatch();
+                        if (rateMap.containsKey(rate)) {
+                            rate = rate + 0.1;
+                            // FIXME current rate is not a good choice for hash key
+                            // for avoiding the same rate, here I will change the
+                            // actual rate value
+                        }
+                        rateMap.put(rate, match);
+                        rateList.add(rate);
                     }
                 }
 
-                if (match != null) {
-                    MACAddress macAddr = new MACAddress(match.getDataLayerSource());
-                    String mac = macAddr.toString().toLowerCase();
-                    if (allClientMap.containsKey(mac)) {
-                        APAgent agent = allClientMap.get(mac).getAgent();
-                        if (agent != null) {
-                            // set up message data
-                            byte[] message = makeByteMessageToClient(macAddr, "c", "scan");
-                            agent.send(message);
-                            log.info("Send message to agent for client scanning");
+                java.util.Collections.sort(rateList);
+                java.util.Collections.reverse(rateList);
+                System.out.println(rateList);
+
+                offloadingCandidates.clear();
+                for (int i = 0; i < 3; i++) {
+                    double rate = rateList.get(i);
+                    match = rateMap.get(rate);
+                    if (match != null) {
+                        MACAddress macAddr = new MACAddress(match.getDataLayerDestination());
+                        String mac = macAddr.toString().toLowerCase();
+                        if (allClientMap.containsKey(mac)) {
+                            Client client = allClientMap.get(mac);
+                            offloadingCandidates.add(client);
+                            APAgent agent = client.getAgent();
+                            if (agent != null) {
+                                // set up message data
+                                byte[] message = makeByteMessageToClient(macAddr, "c", "app");
+                                agent.send(message);
+                                log.info("Send message to agent for collecting client app info");
+                            }
                         }
                     }
                 }
+
+
             }
         } catch (Exception e) {
             log.error("Failure retrieving flow statistics from switch " + sw, e);
@@ -355,7 +377,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     private byte[] makeByteMessageToClient(MACAddress mac, String signal, String data) {
         byte[] m = mac.toBytes();
         byte[] b1 = signal.getBytes();
-        byte[] b2 = data.getBytes();
+        byte[] b2 = (data + "|\n").getBytes();
 
         byte[] message = new byte[b1.length + b2.length + m.length];
 
@@ -364,6 +386,19 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         System.arraycopy(b2, 0, message, b1.length + m.length, b2.length);
 
         return message;
+    }
+
+    void receiveCltAppInfo(String cltEthAddr, String app) {
+        log.info("received scan result from " + cltEthAddr);
+        MACAddress macAddr = MACAddress.valueOf(cltEthAddr);
+        Client clt = allClientMap.get(cltEthAddr);
+
+        if (app.toLowerCase().equals("youtube") && clt != null) {
+            byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
+            clt.getAgent().send(msg);
+            log.info("ask client (" + cltEthAddr + ") to scan");
+            return;
+        }
     }
 
     void receiveScanResult(String[] fields) {

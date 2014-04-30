@@ -45,6 +45,7 @@ class ClickManageServer implements Runnable {
     private final String MSG_CLIENT_RATE = "clientrate";
     private final String MSG_CLIENT_DISCONNECT = "clientdisconnect";
     private final String MSG_CLIENT_SCAN = "scan";
+    private final String MSG_CLT_APP = "app";
 
     private final int SERVER_PORT;
 
@@ -79,7 +80,6 @@ class ClickManageServer implements Runnable {
             catch (IOException e) {
                 log.error("controllerSocket.accept() failed: " + SERVER_PORT);
                 e.printStackTrace();
-                System.exit(-1);
             }
         }
     }
@@ -110,6 +110,10 @@ class ClickManageServer implements Runnable {
 
     private void receiveScanResult(String[] fields) {
         master.receiveScanResult(fields);
+    }
+
+    private void receiveCltAppInfo(String mac, String app) {
+        master.receiveCltAppInfo(mac, app);
     }
 
     private class ConnectionHandler implements Runnable {
@@ -150,6 +154,9 @@ class ClickManageServer implements Runnable {
                 clientDisconnect(agentAddr, clientEthAddr);
             } else if (msg_type.equals(MSG_CLIENT_SCAN)) {
                 receiveScanResult(fields);
+            } else if (msg_type.equals(MSG_CLT_APP)) {
+                System.out.println(fields[2]);
+                receiveCltAppInfo(fields[1], fields[2]);
             }
 
         }

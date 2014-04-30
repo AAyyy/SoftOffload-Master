@@ -43,6 +43,7 @@ public class Client implements Comparable<Object> {
     private InetAddress ipAddress;
     private float upRate;
     private float downRate;
+    private String app = "trivial";
 
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
@@ -214,6 +215,23 @@ public class Client implements Comparable<Object> {
      */
     public void setSwitch(IOFSwitch sw) {
         this.ofSwitch = sw;
+    }
+
+    /**
+     * Set the client's running application
+     *
+     * @param app
+     */
+    public void setApp(String app) {
+        this.app = app;
+    }
+
+    /**
+     * Get the client's running app
+     * @return app
+     */
+    public String getApp() {
+        return app;
     }
 
     /**

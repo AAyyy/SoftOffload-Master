@@ -153,7 +153,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     // private IOFSwitch ofSwitch;
 
     // some defaults
-    private final int DEFAULT_PORT = 2819;
+    private final int DEFAULT_PORT = 28190;
     private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
     private final String DEFAULT_AP_CONFIG = "apConfig";
     private final float OF_MONITOR_INTERVAL = 2.0f;
@@ -211,22 +211,36 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
      */
     synchronized void receiveClientInfo(final InetAddress agentAddr,
             final String clientEthAddr, final String clientIpAddr) {
+        String clientMac = clientEthAddr.toLowerCase();
 
         log.info("Client message from " + agentAddr.getHostAddress() + ": " +
-               clientEthAddr + " - " + clientIpAddr);
+               clientMac + " - " + clientIpAddr);
 
         if (!isAPAgentTracked(agentAddr)) {
             log.warn("Found unrecorded agent ap");
             addUnrecordedAPAgent(agentAddr);
         }
 
+        // if client mac is in allClientMap but agent is not the same
+        if (allClientMap.containsKey(clientMac)) {
+            Client clt = allClientMap.get(clientMac);
+            APAgent agent = clt.getAgent();
+            if (!(agent.getIpAddress().getHostAddress().equals(agentAddr.getHostAddress()))) {
+                // client has connected to a new AP, inform old agent
+                byte[] message = makeByteMessageToClient(clt.getMacAddress(), "a", "remove");
+                agent.send(message);
+                agent.removeClient(clientMac);
+                allClientMap.remove(clientMac);
+            }
+        }
+
         // ask APAgent to handle the info
         Client client = apAgentMap.get(agentAddr.getHostAddress())
-                                .receiveClientInfo(clientEthAddr, clientIpAddr);
+                                .receiveClientInfo(clientMac, clientIpAddr);
 
         // record the initialised client object returned from APAgent
-        if (!allClientMap.containsKey(clientEthAddr.toLowerCase()) && client != null) {
-            allClientMap.put(clientEthAddr.toLowerCase(), client);
+        if (!allClientMap.containsKey(clientMac) && client != null) {
+            allClientMap.put(clientMac, client);
         }
     }
 
@@ -344,10 +358,16 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
                 java.util.Collections.sort(rateList);
                 java.util.Collections.reverse(rateList);
-                System.out.println(rateList);
+
+
+                System.out.println("rateList: " + rateList);
 
                 offloadingCandidates.clear();
-                for (int i = 0; i < 3; i++) {
+                int size = rateList.size();
+                if (size > 3) {
+                    size = 3;
+                }
+                for (int i = 0; i < size; i++) {
                     double rate = rateList.get(i);
                     match = rateMap.get(rate);
                     if (match != null) {
@@ -389,11 +409,12 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     }
 
     void receiveCltAppInfo(String cltEthAddr, String app) {
-        log.info("received scan result from " + cltEthAddr);
+        log.info("received app info from " + cltEthAddr + " - " + app);
         MACAddress macAddr = MACAddress.valueOf(cltEthAddr);
         Client clt = allClientMap.get(cltEthAddr);
 
         if (app.toLowerCase().equals("youtube") && clt != null) {
+            clt.setApp("youtube");
             byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
             clt.getAgent().send(msg);
             log.info("ask client (" + cltEthAddr + ") to scan");

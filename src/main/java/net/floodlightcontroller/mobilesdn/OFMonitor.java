@@ -146,6 +146,7 @@ public class OFMonitor implements Runnable {
                         }
 
                         if (swQueue.getDownThroughputOverNum() >= 10) {
+                            System.out.println("reach port download threshold!!!");
                             master.switchQueueManagement(sw, swQueue);
                             swQueue.setDownThroughputOverNum(0);
                         }

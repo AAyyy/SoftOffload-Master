@@ -349,7 +349,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                             rate = rate + 0.1;
                             // FIXME current rate is not a good choice for hash key
                             // for avoiding the same rate, here I will change the
-                            // actual rate value
+                            // actual rate value by adding 0.1
                         }
                         rateMap.put(rate, match);
                         rateList.add(rate);

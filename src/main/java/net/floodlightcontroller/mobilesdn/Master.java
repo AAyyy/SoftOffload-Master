@@ -97,11 +97,13 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     private static class SwitchNetworkConfig implements Comparable<Object> {
         public String swIPAddr;
         public int outPort;
+        public int bandwidth;
         public List<String> apList;
 
-        public SwitchNetworkConfig(String ip, int port, List<String> ap) {
+        public SwitchNetworkConfig(String ip, int port, int w, List<String> ap) {
             swIPAddr = ip;
             outPort = port;
+            bandwidth = w;
             apList = ap;
         }
 
@@ -150,7 +152,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
     private List<Client> offloadingCandidates = new CopyOnWriteArrayList<Client>();
 
-    // private IOFSwitch ofSwitch;
+    private long startTime;
 
     // some defaults
     private final int DEFAULT_PORT = 28190;
@@ -305,7 +307,16 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
     }
 
+    synchronized void receiveTimestamp() {
+        log.info("receive start timestamp!");
+        startTime = System.currentTimeMillis();
+    }
+
     void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
+
+        long endTime = System.currentTimeMillis();
+        System.out.println((endTime - startTime) / 1000);
+
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFFlowStatisticsReply reply;
@@ -580,6 +591,26 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 }
                 int outport = Integer.parseInt(fields[1]);
 
+
+                // Ingress BandWidth
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after OFSwitchIP field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("BandWidth")){
+                    log.error("A OutPort field should be followed by a BandWidth field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("No bandwidth value is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                int bandwidth = Integer.parseInt(fields[1]);
+
                 // APs
                 strLine = br.readLine();
                 if (strLine == null) {
@@ -603,7 +634,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                     apList.add(fields[i]);
                 }
 
-                SwitchNetworkConfig swconfig = new SwitchNetworkConfig(swIP, outport, apList);
+                SwitchNetworkConfig swconfig = new SwitchNetworkConfig(swIP, outport, bandwidth, apList);
 
                 if (networkTopoConfig.contains(swconfig)) {
                     log.error("Found dupliated switch network");
@@ -800,7 +831,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                     }
                 }
 
-                swQueueList.add(new SwitchOutQueue(switchId, sc.outPort, agentList));
+                swQueueList.add(new SwitchOutQueue(switchId, sc.outPort, sc.bandwidth, agentList));
             }
         }
 

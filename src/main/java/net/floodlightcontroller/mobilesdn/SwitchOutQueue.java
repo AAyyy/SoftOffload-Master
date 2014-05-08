@@ -14,15 +14,17 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     private long swId;
     private int outPort;
+    private int bandwidth;
     private long receiveBytes = 0;    // init value
     private long transmitBytes = 0;   // init value
     private int downThroughputOver = 0;
 
     private List<APAgent> apList;
 
-    public SwitchOutQueue(long id, int port, List<APAgent> ap) {
+    public SwitchOutQueue(long id, int port, int w, List<APAgent> ap) {
         swId = id;
         outPort = port;
+        bandwidth = w;
         apList = ap;
     }
 
@@ -32,6 +34,10 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     public int getOutPort() {
         return outPort;
+    }
+
+    public int getBandwidth() {
+        return bandwidth;
     }
 
     public int getDownThroughputOverNum() {
@@ -48,6 +54,10 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     public void setOutPort(int port) {
         outPort = port;
+    }
+
+    public void setBandwidth(int w) {
+        bandwidth = w;
     }
 
     public void setAPList(List<APAgent> ap) {

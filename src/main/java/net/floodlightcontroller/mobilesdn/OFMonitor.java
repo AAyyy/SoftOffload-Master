@@ -74,6 +74,7 @@ public class OFMonitor implements Runnable {
 
     // default max rate threshold
     static private final float RATE_THRESHOLD = 1000000;
+    private double QUEUE_THRESHOLD = 0.8; // 80% * bandwidth
 
     // monitoring info is gathered by using a timer
     private class OFMonitorTask extends TimerTask {
@@ -138,7 +139,7 @@ public class OFMonitor implements Runnable {
                         float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
                         // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
 
-                        if (downrate*8 > 1500000) {
+                        if (downrate*8 > (QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000)) {
                            int num = swQueue.getDownThroughputOverNum();
                            swQueue.setDownThroughputOverNum(++num);
                         } else {

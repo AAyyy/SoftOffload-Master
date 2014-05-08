@@ -116,6 +116,10 @@ class ClickManageServer implements Runnable {
         master.receiveCltAppInfo(mac, app);
     }
 
+    private void receiveTimestamp() {
+        master.receiveTimestamp();
+    }
+
     private class ConnectionHandler implements Runnable {
         final DatagramPacket receivedPacket;
 
@@ -157,6 +161,8 @@ class ClickManageServer implements Runnable {
             } else if (msg_type.equals(MSG_CLT_APP)) {
                 System.out.println(fields[2]);
                 receiveCltAppInfo(fields[1], fields[2]);
+            } else if (msg_type.equals("start")) {
+                receiveTimestamp();
             }
 
         }

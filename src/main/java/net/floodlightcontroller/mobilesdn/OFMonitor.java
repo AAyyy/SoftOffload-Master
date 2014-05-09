@@ -142,7 +142,9 @@ public class OFMonitor implements Runnable {
                         swQueue.setDownThroughputOverNum(++num);
                         swQueue.setPendingNum(0);
                         if (swQueue.downRate*8 < rateLimit
-                                && (swQueue.downRate + downrate) * 8 >= rateLimit) {
+                            && swQueue.getPendingNum() > 0
+                            && (swQueue.downRate + downrate) * 8 / 2 >= rateLimit) {
+                            // fluctuation probably caused by OF statistics
                             swQueue.setDownThroughputOverNum(++num);
                         }
                     } else if (swQueue.getDownThroughputOverNum() > 0) {

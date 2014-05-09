@@ -140,14 +140,22 @@ public class OFMonitor implements Runnable {
                         // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
 
                         if (downrate*8 > (QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000)) {
-                           int num = swQueue.getDownThroughputOverNum();
-                           swQueue.setDownThroughputOverNum(++num);
+                            int num = swQueue.getDownThroughputOverNum();
+                            swQueue.setDownThroughputOverNum(++num);
+                        } else if (downrate*8 > (0.7 * QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000)) {
+                            int pendingNum = swQueue.getPendingNum() + 1;
+                            if (pendingNum > 2) {
+                                swQueue.setPendingNum(0);
+                                swQueue.setDownThroughputOverNum(0);
+                            } else {
+                                swQueue.setPendingNum(pendingNum);
+                            }
                         } else {
                             swQueue.setDownThroughputOverNum(0);
                         }
 
                         if (swQueue.getDownThroughputOverNum() >= 10) {
-                            System.out.println("reach port download threshold!!!");
+                            log.info("reach port download threshold!!!");
                             master.switchQueueManagement(sw, swQueue);
                             swQueue.setDownThroughputOverNum(0);
                         }

@@ -18,6 +18,7 @@ public class SwitchOutQueue implements Comparable<Object> {
     private long receiveBytes = 0;    // init value
     private long transmitBytes = 0;   // init value
     private int downThroughputOver = 0;
+    private int pendingNum = 0;
 
     private List<APAgent> apList;
 
@@ -42,6 +43,10 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     public int getDownThroughputOverNum() {
         return downThroughputOver;
+    }
+
+    public int getPendingNum() {
+        return pendingNum;
     }
 
     public List<APAgent> getAPList() {
@@ -82,6 +87,10 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     public void setDownThroughputOverNum(int num) {
         downThroughputOver = num;
+    }
+
+    public void setPendingNum(int num) {
+        pendingNum = num;
     }
 
     @Override

@@ -315,7 +315,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
 
         long endTime = System.currentTimeMillis();
-        System.out.println((endTime - startTime) / 1000);
+        System.out.println(endTime - startTime);
 
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;

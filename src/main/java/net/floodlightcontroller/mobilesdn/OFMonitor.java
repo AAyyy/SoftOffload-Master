@@ -118,8 +118,6 @@ public class OFMonitor implements Runnable {
             requestLength += specificReq.getLength();
             req.setLengthU(requestLength);
 
-
-
             try {
                 // make the query
                 future = sw.queryStatistics(req);
@@ -129,44 +127,46 @@ public class OFMonitor implements Runnable {
             }
 
             if (values != null) {
+                double rateLimit = QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000;
                 for (OFStatistics stat: values) {
                     reply = (OFPortStatisticsReply) stat;
 
                     long receiveBytes = reply.getReceiveBytes();
                     long transmitBytes = reply.getTransmitBytes();
 
-                    if (swQueue.isBytesUpdated) {
-                        float downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
-                        // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
+                    double downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
+                    // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
 
-                        if (downrate*8 > (QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000)) {
-                            int num = swQueue.getDownThroughputOverNum();
+                    if (downrate*8 >= rateLimit) {
+                        int num = swQueue.getDownThroughputOverNum();
+                        swQueue.setDownThroughputOverNum(++num);
+                        swQueue.setPendingNum(0);
+                        if (swQueue.downRate*8 < rateLimit
+                                && (swQueue.downRate + downrate) * 8 >= rateLimit) {
                             swQueue.setDownThroughputOverNum(++num);
-                        } else if (downrate*8 > (0.7 * QUEUE_THRESHOLD * swQueue.getBandwidth() * 1000000)) {
-                            int pendingNum = swQueue.getPendingNum() + 1;
-                            if (pendingNum > 2) {
-                                swQueue.setPendingNum(0);
-                                swQueue.setDownThroughputOverNum(0);
-                            } else {
-                                swQueue.setPendingNum(pendingNum);
-                            }
+                        }
+                    } else if (swQueue.getDownThroughputOverNum() > 0) {
+                        int pendingNum = swQueue.getPendingNum() + 1;
+                        if (pendingNum > 2) {
+                            swQueue.setPendingNum(0);
+                            swQueue.setDownThroughputOverNum(0);
                         } else {
-                            swQueue.setDownThroughputOverNum(0);
+                            swQueue.setPendingNum(pendingNum);
                         }
-
-                        if (swQueue.getDownThroughputOverNum() >= 10) {
-                            log.info("reach port download threshold!!!");
-                            master.switchQueueManagement(sw, swQueue);
-                            swQueue.setDownThroughputOverNum(0);
-                        }
-
                     } else {
-                        swQueue.isBytesUpdated = true;
+                        swQueue.setDownThroughputOverNum(0);
+                    }
+
+                    if (swQueue.getDownThroughputOverNum() >= 10) {
+                        log.info("reach port download threshold!!!");
+                        master.switchQueueManagement(sw, swQueue);
+                        swQueue.setDownThroughputOverNum(0);
+                        swQueue.setPendingNum(0);
                     }
 
                     swQueue.setReceiveBytes(receiveBytes);
                     swQueue.settransmitBytes(transmitBytes);
-
+                    swQueue.downRate = downrate;
                 }
             }
         }

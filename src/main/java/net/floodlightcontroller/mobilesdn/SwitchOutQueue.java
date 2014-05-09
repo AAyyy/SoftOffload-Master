@@ -10,7 +10,8 @@ import java.util.List;
  *
  */
 public class SwitchOutQueue implements Comparable<Object> {
-    public boolean isBytesUpdated = false;  // used by OFMonitor
+    // public boolean isBytesUpdated = false;  // used by OFMonitor
+    public double downRate;
 
     private long swId;
     private int outPort;
@@ -48,6 +49,7 @@ public class SwitchOutQueue implements Comparable<Object> {
     public int getPendingNum() {
         return pendingNum;
     }
+
 
     public List<APAgent> getAPList() {
         return apList;

@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -69,12 +68,14 @@ public class OFMonitor implements Runnable {
 
     // private List<OFFlowStatisticsReply> statsReply;
     private Timer timer;
-    private float interval;
+    private double interval;
+    private int maxNum;
     private List<SwitchOutQueue> swQueueList;
 
     // default max rate threshold
     static private final float RATE_THRESHOLD = 1000000;
-    private double QUEUE_THRESHOLD = 0.8; // 80% * bandwidth
+    private double QUEUE_THRESHOLD = 0.7; // 70% * bandwidth
+    private int PENDING_TIMEOUT = 4;  // 4s
 
     // monitoring info is gathered by using a timer
     private class OFMonitorTask extends TimerTask {
@@ -85,12 +86,13 @@ public class OFMonitor implements Runnable {
     }
 
     public OFMonitor(IFloodlightProviderService fProvider, Master m,
-            float printInterval, List<SwitchOutQueue> swList) {
+            double detectInterval, int maxNum, List<SwitchOutQueue> swList) {
         this.floodlightProvider = fProvider;
         this.master = m;
 
         this.timer = new Timer();
-        this.interval = printInterval;
+        this.interval = detectInterval;
+        this.maxNum = maxNum;
         this.swQueueList = swList;
     }
 
@@ -98,7 +100,7 @@ public class OFMonitor implements Runnable {
     @Override
     public void run() {
         // start the timer with our task
-        timer.schedule(new OFMonitorTask(), (long)5000, (long)this.interval*1000);
+        timer.schedule(new OFMonitorTask(), (long)5000, (long)(this.interval*1000));
     }
 
     private void portStatistics() {
@@ -137,19 +139,29 @@ public class OFMonitor implements Runnable {
                     double downrate = (receiveBytes - swQueue.getReceiveBytes()) / (this.interval);
                     // float uprate = (transmitBytes - swQueue.getTransmitBytes()) / (this.interval);
 
+                    if (downrate*8 >= rateLimit && swQueue.getDownThroughputOverNum() == 0) {
+                        long endtime = System.currentTimeMillis();
+                        if (master.startTime != 0) {
+                            System.out.println(endtime - master.startTime);
+                        } else {
+                            System.out.println("early found");
+                        }
+                        master.startTime = endtime;
+                    }
+
                     if (downrate*8 >= rateLimit) {
                         int num = swQueue.getDownThroughputOverNum();
                         swQueue.setDownThroughputOverNum(++num);
-                        swQueue.setPendingNum(0);
                         if (swQueue.downRate*8 < rateLimit
                             && swQueue.getPendingNum() > 0
                             && (swQueue.downRate + downrate) * 8 / 2 >= rateLimit) {
                             // fluctuation probably caused by OF statistics
                             swQueue.setDownThroughputOverNum(++num);
                         }
+                        swQueue.setPendingNum(0);
                     } else if (swQueue.getDownThroughputOverNum() > 0) {
                         int pendingNum = swQueue.getPendingNum() + 1;
-                        if (pendingNum > 2) {
+                        if (pendingNum > Math.ceil(PENDING_TIMEOUT / interval)) {
                             swQueue.setPendingNum(0);
                             swQueue.setDownThroughputOverNum(0);
                         } else {
@@ -159,12 +171,18 @@ public class OFMonitor implements Runnable {
                         swQueue.setDownThroughputOverNum(0);
                     }
 
-                    if (swQueue.getDownThroughputOverNum() >= 10) {
+                    if (swQueue.getDownThroughputOverNum() >= maxNum) {
                         log.info("reach port download threshold!!!");
                         master.switchQueueManagement(sw, swQueue);
                         swQueue.setDownThroughputOverNum(0);
                         swQueue.setPendingNum(0);
+                        long t = System.currentTimeMillis();
+                        System.out.println(t - master.startTime);
                     }
+
+                    System.out.print(downrate * 8);
+                    System.out.print("");
+                    System.out.println(swQueue.getDownThroughputOverNum());
 
                     swQueue.setReceiveBytes(receiveBytes);
                     swQueue.settransmitBytes(transmitBytes);

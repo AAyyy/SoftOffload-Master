@@ -152,13 +152,14 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
     private List<Client> offloadingCandidates = new CopyOnWriteArrayList<Client>();
 
-    private long startTime;
+    public long startTime = 0;
 
     // some defaults
     private final int DEFAULT_PORT = 28190;
     private final String DEFAULT_TOPOLOGY_FILE = "networkFile";
     private final String DEFAULT_AP_CONFIG = "apConfig";
-    private final float OF_MONITOR_INTERVAL = 2.0f;
+    private final double OF_MONITOR_INTERVAL = 2.0;
+    private final int OF_MONITOR_MAX_NUM = 10;
 
     public Master(){
         // networkManager = new NetworkManager();
@@ -229,7 +230,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             APAgent agent = clt.getAgent();
             if (!(agent.getIpAddress().getHostAddress().equals(agentAddr.getHostAddress()))) {
                 // client has connected to a new AP, inform old agent
-                byte[] message = makeByteMessageToClient(clt.getMacAddress(), "a", "remove");
+                byte[] message = makeByteMessageToAgent("a", "rm" + clientMac);
                 agent.send(message);
                 agent.removeClient(clientMac);
                 allClientMap.remove(clientMac);
@@ -313,9 +314,6 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
     }
 
     void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
-
-        long endTime = System.currentTimeMillis();
-        System.out.println(endTime - startTime);
 
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
@@ -419,18 +417,33 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         return message;
     }
 
+    private byte[] makeByteMessageToAgent(String signal, String data) {
+        byte[] b1 = signal.getBytes();
+        byte[] b2 = (data + "|\n").getBytes();
+
+        byte[] message = new byte[b1.length + b2.length];
+
+        System.arraycopy(b1, 0, message, 0, b1.length);
+        System.arraycopy(b2, 0, message, b1.length, b2.length);
+
+        return message;
+    }
+
     void receiveCltAppInfo(String cltEthAddr, String app) {
         log.info("received app info from " + cltEthAddr + " - " + app);
         MACAddress macAddr = MACAddress.valueOf(cltEthAddr);
         Client clt = allClientMap.get(cltEthAddr);
 
-        if (app.toLowerCase().equals("youtube") && clt != null) {
-            clt.setApp("youtube");
-            byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
-            clt.getAgent().send(msg);
-            log.info("ask client (" + cltEthAddr + ") to scan");
-            return;
-        }
+//        if (app.toLowerCase().equals("youtube") && clt != null) {
+//            clt.setApp("youtube");
+//            byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
+//            clt.getAgent().send(msg);
+//            log.info("ask client (" + cltEthAddr + ") to scan");
+//            return;
+//        }
+
+        byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
+        clt.getAgent().send(msg);
     }
 
     void receiveScanResult(String[] fields) {
@@ -445,7 +458,9 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             if (info[0].equals("sdntest1") && strength > -90) {
                 for (Client clt: allClientMap.values()) {
                     if (clt.getMacAddress().toString().toLowerCase().equals(fields[1].toLowerCase())) {
-                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] + "|open|\n");
+                        String open = "|open|\n";
+                        String wpa2 = "|wpa|testeitsdn|\n";
+                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] + wpa2);
                         clt.getAgent().send(msg);
                         log.info("ask client (" + fields[1] + ") to switch to sdntest1");
                         return;
@@ -510,6 +525,18 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             port = Integer.parseInt(portNum);
         }
 
+        int monitorNum = OF_MONITOR_MAX_NUM;
+        String num = configOptions.get("ofMonitorMaxNum");
+        if (num != null) {
+            monitorNum = Integer.parseInt(num);
+        }
+
+        double monitorInterval = OF_MONITOR_INTERVAL;
+        String interval = configOptions.get("ofMonitorInterval");
+        if (interval != null) {
+            monitorInterval = Double.parseDouble(interval);
+        }
+
         // network topology config
         String networkTopoFile = DEFAULT_TOPOLOGY_FILE;
         String networkTopoFileConfig = configOptions.get("networkFile");
@@ -533,7 +560,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         executor.execute(new ClickManageServer(this, port, executor));
 
         // Statistics
-        executor.execute(new OFMonitor(this.floodlightProvider, this, OF_MONITOR_INTERVAL, swQueueList));
+        executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
     }
 
     private void parseNetworkConfig(String networkTopoFile) {

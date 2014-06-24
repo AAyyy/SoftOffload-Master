@@ -86,11 +86,13 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         public String ipAddr;
         public String ssid;
         public String bssid;
+        public String auth;
 
-        public APConfig(String ip, String s, String b) {
+        public APConfig(String ip, String s, String b, String auth) {
             ipAddr = ip;
             ssid = s;
             bssid = b;
+            this.auth = auth;
         }
     }
 
@@ -451,23 +453,52 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         log.info("received scan result from " + fields[1]);
         MACAddress macAddr = MACAddress.valueOf(fields[1]);
 
-        for (int i = 2; i < fields.length; i++) {
+        String offloadAp = "";
+        boolean firstRoundFlag = true;
+        double metric = 0;
+        for (int i = 2; i < fields.length; i++) { // choose offloading ap
             String[] info = fields[i].split("&");
             int strength = Integer.parseInt(info[2]);
 
-            if (info[0].equals("sdntest1") && strength > -90) {
-                for (Client clt: allClientMap.values()) {
-                    if (clt.getMacAddress().toString().toLowerCase().equals(fields[1].toLowerCase())) {
-                        String open = "|open|\n";
-                        String wpa2 = "|wpa|testeitsdn|\n";
-                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] + wpa2);
-                        clt.getAgent().send(msg);
-                        log.info("ask client (" + fields[1] + ") to switch to sdntest1");
-                        return;
+            if (strength > -80) {
+                String ssid = info[0];
+                if (apAgentMap.containsKey(ssid)) {
+                    APAgent ap = apAgentMap.get(ssid);
+                    Double currentMetric = 0.7 * -1 * ap.getDownRate() + 0.3 * strength;
+                    if (firstRoundFlag) {
+                        offloadAp = info[0] + "|" + ap.getAuth();
+                        metric = currentMetric;
+                        firstRoundFlag = false;
+                    } else if (currentMetric > metric) {
+                        offloadAp = info[0] + "|" + ap.getAuth();
+                        metric = currentMetric;
                     }
+                } else {
+                    continue;
                 }
             }
         }
+
+        if (offloadAp != "") {
+            Client clt = allClientMap.get(macAddr.toString().toLowerCase());
+            if (clt != null) {
+                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + offloadAp);
+                clt.getAgent().send(msg);
+                log.info("ask client (" + fields[1] + ") to switch to sdntest1");
+            }
+
+        }
+            for (Client clt: allClientMap.values()) {
+                if (clt.getMacAddress().toString().toLowerCase().equals(fields[1].toLowerCas
+                -                        String open = "|open|\n";
+                -                        String wpa2 = "|wpa|testeitsdn|\n";
+                -                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] +
+                -                        clt.getAgent().send(msg);
+                -                        log.info("ask client (" + fields[1] + ") to switch to sdntest1");
+                -                        return;
+
+        }
+
     }
 
 
@@ -747,7 +778,26 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 }
                 String bssid = fields[1];
 
-                apConfigMap.put(ip, new APConfig(ip, ssid, bssid));
+                // AUTH
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after BSSID field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("AUTH")){
+                    log.error("A BSSID field should be followed by a AUTH field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("No AUTH value is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                String auth = fields[1];
+
+                apConfigMap.put(ip, new APConfig(ip, ssid, bssid, auth));
             }
 
             br.close();
@@ -846,13 +896,13 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 for (String agentInetAddr: sc.apList) {
                     if (apConfigMap.containsKey(agentInetAddr)) {
                         APConfig apConfig = apConfigMap.get(agentInetAddr);
-                        APAgent agent = new APAgent(agentInetAddr, sw, apConfig.ssid, apConfig.bssid);
+                        APAgent agent = new APAgent(agentInetAddr, sw, apConfig.ssid, apConfig.bssid, apConfig.auth);
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                     } else {
                         log.warn("Unconfiged AP found with siwtch " + swInetAddrStr);
                         log.warn("Initialize AP " + agentInetAddr + " without SSID and BSSID");
-                        APAgent agent = new APAgent(agentInetAddr, sw, "", "");
+                        APAgent agent = new APAgent(agentInetAddr, sw, "", "", "open");
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                     }

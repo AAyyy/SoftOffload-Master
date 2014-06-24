@@ -58,6 +58,7 @@ public class APAgent {
     private InetAddress ipAddress;
     private String ssid;
     private String bssid;
+    private String auth;
 
     private float upRate;
     private float downRate;
@@ -97,11 +98,12 @@ public class APAgent {
         }
     }
 
-    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b) {
+    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth) {
         this.ipAddress = ipAddr;
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
+        this.auth = auth;
 
         try {
             this.agentSocket = new DatagramSocket();
@@ -111,11 +113,12 @@ public class APAgent {
         }
     }
 
-    public APAgent(String ipAddr, IOFSwitch sw, String s, String b) {
+    public APAgent(String ipAddr, IOFSwitch sw, String s, String b, String auth) {
 
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
+        this.auth = auth;
 
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
@@ -155,7 +158,7 @@ public class APAgent {
 
     /**
      * get AP's total down rate value
-     * @return
+     * @return downRate (float)
      */
     public float getDownRate() {
         return this.downRate;
@@ -193,12 +196,20 @@ public class APAgent {
         return this.bssid;
     }
 
+    public String getAuth() {
+        return this.auth;
+    }
+
     public void setSSID(String s) {
         ssid = s;
     }
 
     public void setBSSID(String b) {
         bssid = b;
+    }
+
+    public void setAuth(String auth) {
+        this.auth = auth;
     }
 
 

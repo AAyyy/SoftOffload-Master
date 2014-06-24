@@ -142,6 +142,7 @@ public class OFMonitor implements Runnable {
                     if (downrate*8 >= rateLimit && swQueue.getDownThroughputOverNum() == 0) {
                         long endtime = System.currentTimeMillis();
                         if (master.startTime != 0) {
+                            System.out.print("Found delay: ");
                             System.out.println(endtime - master.startTime);
                         } else {
                             System.out.println("early found");
@@ -177,11 +178,13 @@ public class OFMonitor implements Runnable {
                         swQueue.setDownThroughputOverNum(0);
                         swQueue.setPendingNum(0);
                         long t = System.currentTimeMillis();
+                        System.out.print("Detecting delay: ");
                         System.out.println(t - master.startTime);
+                        master.startTime = 0;
                     }
 
                     System.out.print(downrate * 8);
-                    System.out.print("");
+                    System.out.print(" ");
                     System.out.println(swQueue.getDownThroughputOverNum());
 
                     swQueue.setReceiveBytes(receiveBytes);

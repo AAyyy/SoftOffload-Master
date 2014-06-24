@@ -488,16 +488,6 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             }
 
         }
-            for (Client clt: allClientMap.values()) {
-                if (clt.getMacAddress().toString().toLowerCase().equals(fields[1].toLowerCas
-                -                        String open = "|open|\n";
-                -                        String wpa2 = "|wpa|testeitsdn|\n";
-                -                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + info[0] +
-                -                        clt.getAgent().send(msg);
-                -                        log.info("ask client (" + fields[1] + ") to switch to sdntest1");
-                -                        return;
-
-        }
 
     }
 

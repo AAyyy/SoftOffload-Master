@@ -354,8 +354,11 @@ public class APAgent implements Comparable<Object> {
 
         builder.append("Agent " + ipAddress.getHostAddress() + ", uprate="
                 + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
-                + ", dpid=" + Long.toString(ofSwitch.getId()) + ", clientNum="
-                + Integer.toString(getClientNum()));
+                + ", clientNum=" + Integer.toString(getClientNum()));
+
+        if (this.ofSwitch != null) {
+            builder.append(", dpid=" + Long.toString(ofSwitch.getId()));
+        }
 
         return builder.toString();
     }

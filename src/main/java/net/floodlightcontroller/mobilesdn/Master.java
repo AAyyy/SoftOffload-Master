@@ -176,6 +176,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
         String ssid;
         String bssid;
+        String auth;
         String ipAddr = ipv4Address.getHostAddress();
         APAgent agent = new APAgent(ipv4Address);
 
@@ -183,14 +184,18 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         if (apConfigMap.containsKey(ipAddr)) {
             ssid = apConfigMap.get(ipAddr).ssid;
             bssid = apConfigMap.get(ipAddr).bssid;
+            auth = apConfigMap.get(ipAddr).auth;
+            log.info("Init AP from APConfig file: ssid=" + ssid + ", auth=" + auth);
         } else {
             ssid = "";
             bssid = "";
+            auth = "";
             log.warn("Unconfiged AP found, initialize it without SSID and BSSID");
         }
 
         agent.setSSID(ssid);
         agent.setBSSID(bssid);
+        agent.setAuth(auth);
         apAgentMap.put(ipAddr, agent);
     }
 
@@ -448,6 +453,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         clt.getAgent().send(msg);
     }
 
+
+    // TODO now elements in apAgentMap are indexed with agent IP address,
+    // which makes the search more complicated here (two-level for loop)
+    // One solution might be change the index to BSSID
     void receiveScanResult(String[] fields) {
 
         log.info("received scan result from " + fields[1]);
@@ -462,22 +471,25 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
 
             if (strength > -80) {
                 String ssid = info[0];
-                if (apAgentMap.containsKey(ssid)) {
-                    APAgent ap = apAgentMap.get(ssid);
-                    Double currentMetric = 0.7 * -1 * ap.getDownRate() + 0.3 * strength;
-                    if (firstRoundFlag) {
-                        offloadAp = info[0] + "|" + ap.getAuth();
-                        metric = currentMetric;
-                        firstRoundFlag = false;
-                    } else if (currentMetric > metric) {
-                        offloadAp = info[0] + "|" + ap.getAuth();
-                        metric = currentMetric;
+                String bssid = info[1];
+                for (APAgent agent: apAgentMap.values()) {
+                    if (agent.getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
+                        Double currentMetric = 0.7 * -1 * agent.getDownRate() + 0.3 * strength;
+                        if (firstRoundFlag) {
+                            offloadAp = ssid + "|" + agent.getAuth();
+                            metric = currentMetric;
+                            firstRoundFlag = false;
+                        } else if (currentMetric > metric) {
+                            offloadAp = ssid + "|" + agent.getAuth();
+                            metric = currentMetric;
+                        }
+                        break;
                     }
-                } else {
-                    continue;
                 }
             }
         }
+
+        System.out.println(offloadAp);
 
         if (offloadAp != "") {
             Client clt = allClientMap.get(macAddr.toString().toLowerCase());

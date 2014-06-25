@@ -462,7 +462,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         log.info("received scan result from " + fields[1]);
         MACAddress macAddr = MACAddress.valueOf(fields[1]);
 
-        String offloadAp = "";
+        APAgent candidate = null;
         boolean firstRoundFlag = true;
         double metric = 0;
         for (int i = 2; i < fields.length; i++) { // choose offloading ap
@@ -475,12 +475,16 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 for (APAgent agent: apAgentMap.values()) {
                     if (agent.getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
                         Double currentMetric = 0.7 * -1 * agent.getDownRate() + 0.3 * strength;
+
+                        System.out.println(ssid + ", " + agent.getDownRate() + ", " + strength);
+                        System.out.println(currentMetric);
+
                         if (firstRoundFlag) {
-                            offloadAp = ssid + "|" + agent.getAuth();
+                            candidate = agent;
                             metric = currentMetric;
                             firstRoundFlag = false;
                         } else if (currentMetric > metric) {
-                            offloadAp = ssid + "|" + agent.getAuth();
+                            candidate = agent;
                             metric = currentMetric;
                         }
                         break;
@@ -489,12 +493,12 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
             }
         }
 
-        System.out.println(offloadAp);
+        System.out.println(candidate.toString());
 
-        if (offloadAp != "") {
+        if (candidate != null) {
             Client clt = allClientMap.get(macAddr.toString().toLowerCase());
-            if (clt != null) {
-                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + offloadAp);
+            if (clt != null && !(clt.getAgent().equals(candidate))) {
+                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + candidate.getSSID() + "|" + candidate.getAuth());
                 clt.getAgent().send(msg);
                 log.info("ask client (" + fields[1] + ") to switch to sdntest1");
             }

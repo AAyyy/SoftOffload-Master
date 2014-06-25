@@ -53,6 +53,7 @@ public class Client implements Comparable<Object> {
     // defaults
     static private final long SECONDS = 3 * 60 * 1000;
 
+    // currently not used anymore, for testing before
     private void initializeClientTimer() {
 
         switchTimer = new Timer();    // set the timer

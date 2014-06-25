@@ -52,7 +52,7 @@ import net.floodlightcontroller.util.MACAddress;
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
-public class APAgent {
+public class APAgent implements Comparable<Object> {
     protected static Logger log = LoggerFactory.getLogger(APAgent.class);
 
     private InetAddress ipAddress;
@@ -464,4 +464,31 @@ public class APAgent {
         }
     }
 
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof APAgent))
+            return false;
+
+        if (obj == this)
+            return true;
+
+        APAgent that = (APAgent) obj;
+
+        return (this.bssid.toLowerCase().equals(that.getBSSID().toLowerCase()));
+    }
+
+
+    @Override
+    public int compareTo(Object o) {
+        assert (o instanceof APAgent);
+
+        if (this.bssid.toLowerCase().equals(((APAgent)o).getBSSID().toLowerCase()))
+            return 0;
+
+        if (this.downRate > ((APAgent)o).getDownRate())
+            return 1;
+
+        return -1;
+    }
 }

@@ -474,7 +474,7 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
                 String bssid = info[1];
                 for (APAgent agent: apAgentMap.values()) {
                     if (agent.getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
-                        Double currentMetric = 0.7 * -1 * agent.getDownRate() + 0.3 * strength;
+                        Double currentMetric = 0.8 * -1 * agent.getDownRate() / 100000 + 0.2 * strength;
 
                         System.out.println(ssid + ", " + agent.getDownRate() + ", " + strength);
                         System.out.println(currentMetric);
@@ -498,7 +498,10 @@ public class Master implements IFloodlightModule, IFloodlightService, IOFSwitchL
         if (candidate != null) {
             Client clt = allClientMap.get(macAddr.toString().toLowerCase());
             if (clt != null && !(clt.getAgent().equals(candidate))) {
-                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|" + candidate.getSSID() + "|" + candidate.getAuth());
+                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
+                                        + candidate.getSSID() + "|"
+                                        + candidate.getBSSID() + "|"
+                                        + candidate.getAuth());
                 clt.getAgent().send(msg);
                 log.info("ask client (" + fields[1] + ") to switch to sdntest1");
             }

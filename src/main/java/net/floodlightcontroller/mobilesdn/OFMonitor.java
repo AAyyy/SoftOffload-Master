@@ -73,7 +73,7 @@ public class OFMonitor implements Runnable {
     private List<SwitchOutQueue> swQueueList;
 
     // default max rate threshold
-    static private final float RATE_THRESHOLD = 1000000;
+    static private final double RATE_THRESHOLD = 5000000;
     private double QUEUE_THRESHOLD = 0.7; // 70% * bandwidth
     private int PENDING_TIMEOUT = 4;  // 4s
 
@@ -81,7 +81,8 @@ public class OFMonitor implements Runnable {
     private class OFMonitorTask extends TimerTask {
         public void run() {
             // flowStatistics();
-            portStatistics();
+            // portStatistics();
+            portStatisticsForEachAP();
         }
     }
 
@@ -142,10 +143,9 @@ public class OFMonitor implements Runnable {
                     if (downrate*8 >= rateLimit && swQueue.getDownThroughputOverNum() == 0) {
                         long endtime = System.currentTimeMillis();
                         if (master.startTime != 0) {
-                            System.out.print("Found delay: ");
-                            System.out.println(endtime - master.startTime);
+                            log.debug("Found delay: " + (endtime - master.startTime));
                         } else {
-                            System.out.println("early found");
+                            log.debug("early found");
                         }
                         master.startTime = endtime;
                     }
@@ -173,23 +173,93 @@ public class OFMonitor implements Runnable {
                     }
 
                     if (swQueue.getDownThroughputOverNum() >= maxNum) {
-                        log.info("reach port download threshold!!!");
+                        log.info("reach switchqueue port download threshold!!!");
                         master.switchQueueManagement(sw, swQueue);
                         swQueue.setDownThroughputOverNum(0);
                         swQueue.setPendingNum(0);
                         long t = System.currentTimeMillis();
-                        System.out.print("Detecting delay: ");
-                        System.out.println(t - master.startTime);
+                        log.debug("Detecting delay: " + (t - master.startTime));
                         master.startTime = 0;
                     }
 
-                    System.out.print(downrate * 8);
-                    System.out.print(" ");
-                    System.out.println(swQueue.getDownThroughputOverNum());
+                    log.debug((downrate * 8) + " " + swQueue.getDownThroughputOverNum());
 
                     swQueue.setReceiveBytes(receiveBytes);
                     swQueue.settransmitBytes(transmitBytes);
                     swQueue.downRate = downrate;
+                }
+            }
+        }
+    }
+    
+    private void portStatisticsForEachAP() {
+        List<OFStatistics> values = null;
+        Future<List<OFStatistics>> future;
+        OFPortStatisticsReply reply;
+
+        for (APAgent agent: master.getAllAPAgents()) {
+            IOFSwitch sw = agent.getSwitch();
+
+            OFStatisticsRequest req = new OFStatisticsRequest();
+            req.setStatisticType(OFStatisticsType.PORT);
+            int requestLength = req.getLengthU();
+            OFPortStatisticsRequest specificReq = new OFPortStatisticsRequest();
+            specificReq.setPortNumber(agent.getOFPort());
+            req.setStatistics(Collections.singletonList((OFStatistics)specificReq));
+            requestLength += specificReq.getLength();
+            req.setLengthU(requestLength);
+
+            try {
+                // make the query
+                future = sw.queryStatistics(req);
+                values = future.get(3, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.error("Failure retrieving port statistics from switch " + sw, e);
+            }
+
+            if (values != null) {
+                
+                for (OFStatistics stat: values) {
+                    reply = (OFPortStatisticsReply) stat;
+
+                    long upBytes = reply.getReceiveBytes();
+                    long downBytes = reply.getTransmitBytes();
+
+                    double downrate = (downBytes - agent.getOFDownBytes()) / (this.interval);
+                    
+                    if (downrate*8 >= RATE_THRESHOLD) {
+                        int num = agent.getDownRateOverNum();
+                        agent.setDownRateOverNum(++num);
+                        if (agent.getOFDownRate()*8 < RATE_THRESHOLD
+                            && agent.getPendingNum() > 0
+                            && (agent.getOFDownRate() + downrate) * 8 / 2 >= RATE_THRESHOLD) {
+                            // fluctuation probably caused by OF statistics
+                            agent.setDownRateOverNum(++num);
+                        }
+                        agent.setPendingNum(0);
+                        log.info("Agent " + agent.getSSID() + " got large traffic load: " 
+                                + (downrate * 8) + " " + agent.getDownRateOverNum());
+                    } else if (agent.getDownRateOverNum() > 0) {
+                        int pendingNum = agent.getPendingNum() + 1;
+                        if (pendingNum > Math.ceil(PENDING_TIMEOUT / interval)) {
+                            agent.setPendingNum(0);
+                            agent.setDownRateOverNum(0);
+                        } else {
+                            agent.setPendingNum(pendingNum);
+                        }
+                    } else {
+                        agent.setDownRateOverNum(0);
+                    }
+
+                    if (agent.getDownRateOverNum() >= maxNum) {
+                        master.agentTrafficManagement(sw, agent);
+                        agent.setDownRateOverNum(0);
+                        agent.setPendingNum(0);
+                    }
+
+                    agent.setOFDownBytes(downBytes);
+                    agent.setOFUpBytes(upBytes);
+                    agent.setOFDownRate(downrate);
                 }
             }
         }

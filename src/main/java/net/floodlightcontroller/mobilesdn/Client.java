@@ -44,6 +44,7 @@ public class Client implements Comparable<Object> {
     private float upRate;
     private float downRate;
     private String app = "trivial";
+    private long connectTime;
 
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
@@ -90,6 +91,7 @@ public class Client implements Comparable<Object> {
         this.agent = agt;
 
         // initializeClientTimer();
+        initConnectTime();
     }
 
     /**
@@ -104,6 +106,7 @@ public class Client implements Comparable<Object> {
         this.agent = agt;
 
         // initializeClientTimer();
+        initConnectTime();
     }
 
     /**
@@ -119,6 +122,7 @@ public class Client implements Comparable<Object> {
         this.agent = agt;
 
         // initializeClientTimer();
+        initConnectTime();
     }
 
     /**
@@ -134,6 +138,22 @@ public class Client implements Comparable<Object> {
         this.agent = agt;
 
         // initializeClientTimer();
+        initConnectTime();
+    }
+
+    /**
+     * Set the client's first connecting time
+     */
+    public void initConnectTime() {
+        this.connectTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Get the client's first connecting time
+     * @return this.connectTime
+     */
+    public long getConnectTime() {
+        return this.connectTime;
     }
 
     /**

@@ -59,12 +59,21 @@ public class APAgent implements Comparable<Object> {
     private String ssid;
     private String bssid;
     private String auth;
+    private short ofPort;
 
     private float upRate;
     private float downRate;
     private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
+    
+    
+    // used for new OFMonitor statistics
+    private long ofDownBytes = 0;
+    private long ofUpBytes = 0;
+    private double ofDownRate;
+    private int downRateOverNum = 0;
+    private int pendingNum = 0;
 
 
     // defaults
@@ -98,12 +107,13 @@ public class APAgent implements Comparable<Object> {
         }
     }
 
-    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth) {
+    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth, short port) {
         this.ipAddress = ipAddr;
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
         this.auth = auth;
+        this.ofPort = port;
 
         try {
             this.agentSocket = new DatagramSocket();
@@ -113,12 +123,13 @@ public class APAgent implements Comparable<Object> {
         }
     }
 
-    public APAgent(String ipAddr, IOFSwitch sw, String s, String b, String auth) {
+    public APAgent(String ipAddr, IOFSwitch sw, String s, String b, String auth, short port) {
 
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
         this.auth = auth;
+        this.ofPort = port;
 
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
@@ -211,6 +222,57 @@ public class APAgent implements Comparable<Object> {
     public void setAuth(String auth) {
         this.auth = auth;
     }
+    
+    public short getOFPort() {
+        return this.ofPort;
+    }
+
+    public void setOFPort(short port) {
+        ofPort = port;
+    }
+    
+    
+    // these following funcs might be removed later
+    public int getDownRateOverNum() {
+        return downRateOverNum;
+    }
+
+    public int getPendingNum() {
+        return pendingNum;
+    }
+    
+    public long getOFDownBytes() {
+        return ofDownBytes;
+    }
+
+    public long getOFUpBytes() {
+        return ofUpBytes;
+    }
+
+    public void setOFDownBytes(long bytes) {
+        ofDownBytes = bytes;
+    }
+
+    public void setOFUpBytes(long bytes) {
+        ofUpBytes = bytes;
+    }
+
+    public void setDownRateOverNum(int num) {
+        downRateOverNum = num;
+    }
+
+    public void setPendingNum(int num) {
+        pendingNum = num;
+    }
+    
+    public double getOFDownRate() {
+        return ofDownRate;
+    }
+
+    public void setOFDownRate(double rate) {
+        ofDownRate = rate;
+    }
+    
 
 
     /**

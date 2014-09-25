@@ -165,7 +165,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
     private Map<String, Client> allClientMap = new ConcurrentHashMap<String, Client>();
 
     private List<Client> offloadingCandidates = new CopyOnWriteArrayList<Client>();
-
+    
+    public boolean enableCellular = false;
     public long startTime = 0;
 
     // some defaults
@@ -572,6 +573,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
 //            return;
 //        }
 
+        log.info("Send message to agent " + clt.getAgent().getSSID() 
+                + " for collecting wifi signal level");
         byte[] msg = makeByteMessageToClient(macAddr, "c", "scan|\n");
         clt.getAgent().send(msg);
     }
@@ -584,6 +587,11 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         log.info("received scan result from " + fields[1]);
         MACAddress macAddr = MACAddress.valueOf(fields[1]);
+        Client clt = allClientMap.get(macAddr.toString().toLowerCase());
+        if (clt == null) {
+            log.warn("request from unknown client " + fields[1] + ", discard it...");
+            return;
+        }
 
         APAgent candidate = null;
         boolean firstRoundFlag = true;
@@ -595,6 +603,11 @@ public class Master implements IFloodlightModule, IFloodlightService,
             if (strength > -80) {
                 String ssid = info[0];
                 String bssid = info[1];
+                if (clt.getAgent().getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
+                    // skip the ap currently connected to client
+                    continue;
+                }
+                
                 for (APAgent agent: apAgentMap.values()) {
                     if (agent.getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
                         Double currentMetric = 0.8 * -1 * agent.getDownRate() / 10000 + 0.2 * strength;
@@ -616,27 +629,27 @@ public class Master implements IFloodlightModule, IFloodlightService,
             }
         }
 
-        System.out.println(candidate.toString());
+        // System.out.println(candidate.toString());
 
         if (candidate != null) {
-            Client clt = allClientMap.get(macAddr.toString().toLowerCase());
-            if (clt != null && !(clt.getAgent().equals(candidate))) {
-                IOFSwitch sw = clt.getSwitch();
-                List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
-                
-                byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
-                                        + candidate.getSSID() + "|"
-                                        + candidate.getBSSID() + "|"
-                                        + candidate.getAuth());
-                clt.getAgent().send(msg);
-                
-                // change old OF flow entries
-                // this may not needed if candidate is connected to a different OFswitch
-                changeOFFlowOutport(matchList, sw, candidate.getOFPort());
-                
-                log.info("ask client (" + fields[1] + ") to switch to " + candidate.getSSID());
-            }
-
+            IOFSwitch sw = clt.getSwitch();
+            List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
+            
+            byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
+                                    + candidate.getSSID() + "|"
+                                    + candidate.getBSSID() + "|"
+                                    + candidate.getAuth());
+            clt.getAgent().send(msg);
+            
+            // change old OF flow entries
+            // this may not needed if candidate is connected to a different OFswitch
+            changeOFFlowOutport(matchList, sw, candidate.getOFPort());
+            
+            log.info("ask client (" + fields[1] + ") to switch to " + candidate.getSSID());
+        } else if (enableCellular == true) {
+            byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
+            clt.getAgent().send(msg);
+            log.info("ask client to use cellular network");
         }
 
     }
@@ -761,6 +774,12 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // read configure options
         Map<String, String> configOptions = context.getConfigParams(this);
+        
+        // cellular offloading
+        String flag = configOptions.get("enableCellular");
+        if (flag.toLowerCase().equals("true")) {
+            this.enableCellular = true;
+        }
 
         // master port config
         int port = DEFAULT_PORT;

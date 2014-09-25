@@ -257,6 +257,8 @@ public class OFMonitor implements Runnable {
                         agent.setPendingNum(0);
                     }
 
+                    log.debug("Agent " + agent.getSSID() + ": " + (downrate * 8) 
+                            + " " + agent.getDownRateOverNum());
                     agent.setOFDownBytes(downBytes);
                     agent.setOFUpBytes(upBytes);
                     agent.setOFDownRate(downrate);

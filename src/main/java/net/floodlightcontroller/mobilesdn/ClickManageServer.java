@@ -159,7 +159,7 @@ class ClickManageServer implements Runnable {
             } else if (msg_type.equals(MSG_CLIENT_SCAN)) {
                 receiveScanResult(fields);
             } else if (msg_type.equals(MSG_CLT_APP)) {
-                System.out.println(fields[2]);
+                // System.out.println(fields[2]);
                 receiveCltAppInfo(fields[1], fields[2]);
             } else if (msg_type.equals("start")) {
                 receiveTimestamp();

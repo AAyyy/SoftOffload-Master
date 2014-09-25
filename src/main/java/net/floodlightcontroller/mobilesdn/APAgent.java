@@ -525,7 +525,16 @@ public class APAgent implements Comparable<Object> {
             clt.updateDownRate(downrate);
             // System.out.println(clt.toString());
         } else {
-            log.warn("Received uninilized Client rate info, discard it!");
+            log.warn("Received uninilized Client rate info, checking with agent...");
+            
+            MACAddress macAddr = MACAddress.valueOf(mac);
+            byte[] m = macAddr.toBytes();
+            byte[] signal = "ack".getBytes();
+            byte[] message = new byte[m.length + signal.length];
+
+            System.arraycopy(signal, 0, message, 0, signal.length);
+            System.arraycopy(m, 0, message, signal.length, m.length);
+            this.send(message);
         }
     }
 

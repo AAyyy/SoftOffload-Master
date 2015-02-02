@@ -98,13 +98,15 @@ public class Master implements IFloodlightModule, IFloodlightService,
         public String bssid;
         public String auth;
         public short ofPort;
+        public double downlinkBW;  // bandwidth
 
-        public APConfig(String ip, String s, String b, String auth, short port) {
+        public APConfig(String ip, String s, String b, String auth, short port, double bw) {
             ipAddr = ip;
             ssid = s;
             bssid = b;
             this.auth = auth;
             ofPort = port;
+            downlinkBW = bw;
         }
     }
 
@@ -195,6 +197,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         String bssid;
         String auth;
         short ofPort;
+        double bw;
         String ipAddr = ipv4Address.getHostAddress();
         APAgent agent = new APAgent(ipv4Address);
 
@@ -205,12 +208,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
             bssid = ap.bssid;
             auth = ap.auth;
             ofPort = ap.ofPort;
+            bw = ap.downlinkBW;
             log.info("Init AP from APConfig file: ssid=" + ssid + ", auth=" + auth);
         } else {
             ssid = "";
             bssid = "";
             auth = "";
             ofPort = 0;
+            bw = 0;
             log.warn("Unconfiged AP found, initialize it without SSID and BSSID");
         }
 
@@ -218,6 +223,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         agent.setBSSID(bssid);
         agent.setAuth(auth);
         agent.setOFPort(ofPort);
+        agent.setDownlinkBW(bw);
         apAgentMap.put(ipAddr, agent);
     }
 
@@ -279,8 +285,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
         }
         
         // ask APAgent to handle the info
-        Client client = apAgentMap.get(agentAddr.getHostAddress())
-                                .receiveClientInfo(clientMac, clientIpAddr);
+        APAgent agent = apAgentMap.get(agentAddr.getHostAddress());
+        Client client = agent.receiveClientInfo(clientMac, clientIpAddr);
 
         // record the initialised client object returned from APAgent
         if (!allClientMap.containsKey(clientMac) && client != null) {
@@ -330,8 +336,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
             addUnrecordedAPAgent(agentAddr);
         }
 
-        float r1 = Float.parseFloat(upRate);
-        float r2 = Float.parseFloat(downRate);
+        double r1 = Double.parseDouble(upRate);
+        double r2 = Double.parseDouble(downRate);
         apAgentMap.get(agentAddr.getHostAddress()).updateUpRate(r1);
         apAgentMap.get(agentAddr.getHostAddress()).updateDownRate(r2);
         // System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
@@ -349,8 +355,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
             addUnrecordedAPAgent(agentAddr);
         }
 
-        float r1 = Float.parseFloat(upRate);
-        float r2 = Float.parseFloat(downRate);
+        double r1 = Double.parseDouble(upRate);
+        double r2 = Double.parseDouble(downRate);
         apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
     }
 
@@ -582,7 +588,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     // TODO now elements in apAgentMap are indexed with agent IP address,
     // which makes the search more complicated here (two-level for loop)
-    // One solution might be change the index to BSSID
+    // One solution might be adding another AP map which uses BSSIDs as Hash
+    // keys
     void receiveScanResult(String[] fields) {
 
         log.info("received scan result from " + fields[1]);
@@ -592,66 +599,123 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.warn("request from unknown client " + fields[1] + ", discard it...");
             return;
         }
-
-        APAgent candidate = null;
-        boolean firstRoundFlag = true;
-        double metric = 0;
-        for (int i = 2; i < fields.length; i++) { // choose offloading ap
-            String[] info = fields[i].split("&");
-            int strength = Integer.parseInt(info[2]);
-
-            if (strength > -80) {
-                String ssid = info[0];
-                String bssid = info[1];
-                if (clt.getAgent().getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
-                    // skip the ap currently connected to client
-                    continue;
-                }
-                
+        
+        clt.updateLocationInfo(Arrays.copyOfRange(fields, 2, fields.length - 1));
+        if (clt.getAPScanningTime() == 3) {
+            log.info("preparing offloading...");
+            Map<String, Double> apBandwidthUtilizationMap = new HashMap<String, Double>();
+            Map<String, Double> cltPotentialRateMap = new HashMap<String, Double>();
+            
+            // get max rate value
+            Set<String> apSet = clt.getNearbyAPSet();
+            double maxPotentialRate = 0;
+            for (String bssid: apSet) {
                 for (APAgent agent: apAgentMap.values()) {
-                    if (agent.getBSSID().toLowerCase().equals(bssid.toLowerCase())) {
-                        Double currentMetric = 0.8 * -1 * agent.getDownRate() / 10000 + 0.2 * strength;
-
-                        System.out.println(ssid + ", " + agent.getDownRate() + ", " + strength);
-                        System.out.println(currentMetric);
-
-                        if (firstRoundFlag) {
-                            candidate = agent;
-                            metric = currentMetric;
-                            firstRoundFlag = false;
-                        } else if (currentMetric > metric) {
-                            candidate = agent;
-                            metric = currentMetric;
+                    if (agent.getBSSID().toLowerCase().equals(bssid)) {
+                        double rate, restRate, agentRate;
+                        if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
+                            rate = clt.getDownRate() / 5000;
+                            agentRate = agent.getDownRate() / 5000;
+                            double agentDownBW = agent.getDownlinkBW();
+                            
+                            if (rate >= agentDownBW) {
+                                restRate = agentDownBW;
+                            } else {
+                                restRate = agent.getDownlinkBW() - agentRate + rate;
+                            }
+                            
+                            log.info("rate values of current ap: rate=" + rate + ", restRate=" + restRate);
+                        } else { // estimated bandwidth for client
+                            agentRate = agent.getDownRate() / 5000;
+                            rate = agent.getDownlinkBW() - agentRate;
+                            restRate = rate;
+                            log.info("rate values of different ap: rate=" + rate + ", restRate=" + restRate);
                         }
+                        
+                        cltPotentialRateMap.put(bssid, rate);
+                        apBandwidthUtilizationMap.put(bssid, restRate / agent.getDownlinkBW());
+                        if (rate > maxPotentialRate) {
+                            maxPotentialRate = rate;
+                        }
+
                         break;
                     }
                 }
             }
+            
+            // log.info("maxPotentialRate=" + maxPotentialRate);
+            
+            // evaluate each AP
+            String candidateBSSID = null;
+            double metric = 0;
+            boolean firstAPCandidate = true;
+            for (String bssid: apBandwidthUtilizationMap.keySet()) {
+                try {
+                    double signalMetric = clt.signalEvaluation(bssid);
+                    double overheadMetric;
+                    if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
+                        overheadMetric = 0;
+                    } else {
+                        overheadMetric = 0.2;
+                    }
+                    double rate = cltPotentialRateMap.get(bssid);
+                    double restRateUtilization = apBandwidthUtilizationMap.get(bssid);
+                    double evaluationMetric = signalMetric + rate / maxPotentialRate 
+                                                    * restRateUtilization
+                                                    - overheadMetric;
+                    
+                    log.info("metric for AP " + bssid + ": " + signalMetric + " + " 
+                                + rate + " / " + maxPotentialRate + " * " + restRateUtilization
+                                + " - " + overheadMetric + " = " + evaluationMetric);
+                    
+                    if (firstAPCandidate) {
+                        candidateBSSID = bssid;
+                        metric = evaluationMetric;
+                        firstAPCandidate = false;
+                    } else if (evaluationMetric > metric) {
+                        candidateBSSID = bssid;
+                        metric = evaluationMetric;
+                    }
+                    
+                } catch (Exception e) {
+                    log.error("Failure to evaluate AP " + bssid, e);
+                }
+            }
+
+            log.info("candidate: " + candidateBSSID + ", metric: " + metric);
+            
+            if (candidateBSSID != null) {
+                for (APAgent agent: apAgentMap.values()) {
+                    if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
+                        // System.out.println(agent.toString());
+                        IOFSwitch sw = clt.getSwitch();
+                        List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
+                        
+                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
+                                                + agent.getSSID() + "|"
+                                                + agent.getBSSID() + "|"
+                                                + agent.getAuth());
+                        clt.getAgent().send(msg);
+                        
+                        // change old OF flow entries
+                        // this may not needed if candidate is connected to a different OFswitch
+                        changeOFFlowOutport(matchList, sw, agent.getOFPort());
+                        
+                        log.info("ask client (" + fields[1] + ") to switch to " + agent.getSSID());
+
+                        break;
+                    }
+                }
+                log.error("can not find this agent for offloading: " + candidateBSSID);
+                
+            } else if (enableCellular == true) {
+                byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
+                clt.getAgent().send(msg);
+                log.info("ask client to use cellular network");
+            }
+            
         }
-
-        // System.out.println(candidate.toString());
-
-        if (candidate != null) {
-            IOFSwitch sw = clt.getSwitch();
-            List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
-            
-            byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
-                                    + candidate.getSSID() + "|"
-                                    + candidate.getBSSID() + "|"
-                                    + candidate.getAuth());
-            clt.getAgent().send(msg);
-            
-            // change old OF flow entries
-            // this may not needed if candidate is connected to a different OFswitch
-            changeOFFlowOutport(matchList, sw, candidate.getOFPort());
-            
-            log.info("ask client (" + fields[1] + ") to switch to " + candidate.getSSID());
-        } else if (enableCellular == true) {
-            byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
-            clt.getAgent().send(msg);
-            log.info("ask client to use cellular network");
-        }
-
+        
     }
     
     void changeOFFlowOutport(List<OFMatch> matchList, IOFSwitch sw, short outPort) {
@@ -814,7 +878,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         if (apConfig != null) {
             apConfigPath = apConfig;
         }
-        parseAPConfig (apConfigPath);
+        parseAPConfig(apConfigPath);
 
 
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
@@ -827,7 +891,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     private void parseNetworkConfig(String networkTopoFile) {
-
+        log.info("parsing network config...");
         try {
 
             BufferedReader br = new BufferedReader (new FileReader(networkTopoFile));
@@ -946,7 +1010,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     private void parseAPConfig (String apConfigPath) {
-
+        log.info("parsing AP config...");
+        
         try {
             BufferedReader br = new BufferedReader (new FileReader(apConfigPath));
             String strLine;
@@ -1047,8 +1112,27 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     System.exit(1);
                 }
                 short ofport = Short.parseShort(fields[1]);
+                
+                // Bandwidth
+                strLine = br.readLine();
+                if (strLine == null) {
+                    log.error("Unexpected EOF after OFPort field: ");
+                    System.exit(1);
+                }
+                fields = strLine.split(" ");
+                if (!fields[0].equals("DownlinkBW")){
+                    log.error("A OFPort field should be followed by a DownlinkBW field");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                if (fields.length == 1) {
+                    log.error("No Bandwidth is given!");
+                    log.error("Offending line: " + strLine);
+                    System.exit(1);
+                }
+                double bw = Double.parseDouble(fields[1]);
 
-                apConfigMap.put(ip, new APConfig(ip, ssid, bssid, auth, ofport));
+                apConfigMap.put(ip, new APConfig(ip, ssid, bssid, auth, ofport, bw));
             }
 
             br.close();
@@ -1149,13 +1233,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         APConfig apConfig = apConfigMap.get(agentInetAddr);
                         APAgent agent = new APAgent(agentInetAddr, sw, 
                                                     apConfig.ssid, apConfig.bssid, 
-                                                    apConfig.auth, apConfig.ofPort);
+                                                    apConfig.auth, apConfig.ofPort, apConfig.downlinkBW);
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
+                        log.info("Initialize AP " + apConfig.ssid + " (" + apConfig.bssid + ")");
                     } else {
                         log.warn("Unconfiged AP found with siwtch " + swInetAddrStr);
                         log.warn("Initialize AP " + agentInetAddr + " without SSID and BSSID");
-                        APAgent agent = new APAgent(agentInetAddr, sw, "", "", "open", (short)0);
+                        APAgent agent = new APAgent(agentInetAddr, sw, "", "", "open", (short)0, 0);
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                     }

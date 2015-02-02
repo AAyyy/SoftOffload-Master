@@ -60,13 +60,14 @@ public class APAgent implements Comparable<Object> {
     private String bssid;
     private String auth;
     private short ofPort;
+    private double downlinkBW;
 
-    private float upRate;
-    private float downRate;
+    private double upRate;
+    private double downRate;
     private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
-    
+    // private boolean offloadingFlag = false;   // OFMonitor may change this to true
     
     // used for new OFMonitor statistics
     private long ofDownBytes = 0;
@@ -107,13 +108,14 @@ public class APAgent implements Comparable<Object> {
         }
     }
 
-    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth, short port) {
+    public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth, short port, double bw) {
         this.ipAddress = ipAddr;
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
         this.auth = auth;
         this.ofPort = port;
+        this.downlinkBW = bw;
 
         try {
             this.agentSocket = new DatagramSocket();
@@ -123,13 +125,14 @@ public class APAgent implements Comparable<Object> {
         }
     }
 
-    public APAgent(String ipAddr, IOFSwitch sw, String s, String b, String auth, short port) {
+    public APAgent(String ipAddr, IOFSwitch sw, String s, String b, String auth, short port, double bw) {
 
         this.ofSwitch = sw;
         this.ssid = s;
         this.bssid = b;
         this.auth = auth;
         this.ofPort = port;
+        this.downlinkBW = bw;
 
         try {
             this.ipAddress = InetAddress.getByName(ipAddr);
@@ -155,7 +158,7 @@ public class APAgent implements Comparable<Object> {
      * get AP's total up rate value
      * @return
      */
-    public float getUpRate() {
+    public double getUpRate() {
         return this.upRate;
     }
 
@@ -163,7 +166,7 @@ public class APAgent implements Comparable<Object> {
      * Set the AP's up rate value
      * @param r
      */
-    public void updateUpRate(float r) {
+    public void updateUpRate(double r) {
         this.upRate = r;
     }
 
@@ -171,7 +174,7 @@ public class APAgent implements Comparable<Object> {
      * get AP's total down rate value
      * @return downRate (float)
      */
-    public float getDownRate() {
+    public double getDownRate() {
         return this.downRate;
     }
 
@@ -179,7 +182,7 @@ public class APAgent implements Comparable<Object> {
      * Set the AP's down rate value
      * @param r
      */
-    public void updateDownRate(float r) {
+    public void updateDownRate(double r) {
         this.downRate = r;
     }
 
@@ -189,6 +192,14 @@ public class APAgent implements Comparable<Object> {
      */
     public IOFSwitch getSwitch() {
         return this.ofSwitch;
+    }
+    
+    /**
+     * get AP's max downlink bandwidth
+     * @return
+     */
+    public double getDownlinkBW() {
+        return this.downlinkBW;
     }
 
     /**
@@ -229,6 +240,10 @@ public class APAgent implements Comparable<Object> {
 
     public void setOFPort(short port) {
         ofPort = port;
+    }
+    
+    public void setDownlinkBW(double bw) {
+        downlinkBW = bw;
     }
     
     
@@ -383,6 +398,22 @@ public class APAgent implements Comparable<Object> {
     public int getClientNum() {
         return clientMap.size();
     }
+    
+    /**
+     * set offloadingFlag, this flag is used to indicate whether offloading is 
+     * needed now for this AP
+     *
+     * @param macAddress MAC address
+     */
+    /**
+    public synchronized void setOffloadingFlag(boolean flag) {
+        offloadingFlag = flag;
+    }
+    
+    public boolean getOffloadingFlag() {
+        return offloadingFlag;
+    }
+    */
 
     public void send(String message) {
         // send message to agent ap
@@ -415,7 +446,7 @@ public class APAgent implements Comparable<Object> {
         StringBuilder builder = new StringBuilder();
 
         builder.append("Agent " + ipAddress.getHostAddress() + ", uprate="
-                + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
+                + Double.toString(upRate) + ", downrate=" + Double.toString(downRate)
                 + ", clientNum=" + Integer.toString(getClientNum()));
 
         if (this.ofSwitch != null) {
@@ -444,15 +475,16 @@ public class APAgent implements Comparable<Object> {
                 if (client.getIpAddress().getHostAddress() != clientIpAddr) {
                     client.setIpAddress(clientIpAddr);
                 }
-            } else {
+            } else { // new client
                 Client client = new Client(clientEthAddr, clientIpAddr, this);
                 if (ofSwitch != null) {
                     client.setSwitch(ofSwitch);
                 }
                 clientMap.put(mac, client);
 
-                log.info("Connected to new client {} -- {}, initializing it...",
+                log.info("New client connected {} -- {}, initializing it...", 
                         clientEthAddr, clientIpAddr);
+                
                 return client;
             }
         } catch (UnknownHostException e) {
@@ -468,20 +500,23 @@ public class APAgent implements Comparable<Object> {
      * @param clientEthAddr, client mac address
      * @param rate, client's byte rate of ip flows
      */
-    void receiveClientRate(final String clientEthAddr, final float uprate,
-                            final float downrate) {
+    void receiveClientRate(final String clientEthAddr, final double uprate,
+                            final double downrate) {
 
         String mac = clientEthAddr.toLowerCase();
 
         if (clientMap.containsKey(mac)) {
             Client clt = clientMap.get(mac);
+            clt.updateUpRate(uprate);
+            clt.updateDownRate(downrate);
+            // System.out.println(clt.toString());
+            
             IOFSwitch sw = clt.getSwitch();
-
             // modify flow action to drop
             if (uprate >= RATE_THRESHOLD && sw != null) {
 
                 log.info("FlowRate = {}bytes/s: suspicious flow, " +
-                        "drop matched pkts", Float.toString(uprate));
+                        "drop matched pkts", Double.toString(uprate));
 
                 OFMatch match = new OFMatch();
                 match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
@@ -520,10 +555,6 @@ public class APAgent implements Comparable<Object> {
                     log.error("Failure to modify flow entries", e);
                 }
             }
-
-            clt.updateUpRate(uprate);
-            clt.updateDownRate(downrate);
-            // System.out.println(clt.toString());
         } else {
             log.warn("Received uninilized Client rate info, checking with agent...");
             

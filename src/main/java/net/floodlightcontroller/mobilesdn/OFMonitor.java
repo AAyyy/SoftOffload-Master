@@ -252,6 +252,7 @@ public class OFMonitor implements Runnable {
                     }
 
                     if (agent.getDownRateOverNum() >= maxNum) {
+                        // agent.setOffloadingFlag(true);
                         master.agentTrafficManagement(sw, agent);
                         agent.setDownRateOverNum(0);
                         agent.setPendingNum(0);

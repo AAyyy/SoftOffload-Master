@@ -20,8 +20,14 @@ package net.floodlightcontroller.mobilesdn;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,13 +47,16 @@ public class Client implements Comparable<Object> {
 
     private final MACAddress hwAddress;
     private InetAddress ipAddress;
-    private float upRate;
-    private float downRate;
     private String app = "trivial";
+    private double upRate;
+    private double downRate;
     private long connectTime;
 
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
+    // used to record nearby ap signal levels
+    private Map<String, List<Integer>> apSignalLevelMap = new ConcurrentHashMap<String, List<Integer>>();
+    private int apScanningTime = 0;
 
     private Timer switchTimer;
 
@@ -193,7 +202,7 @@ public class Client implements Comparable<Object> {
      * get client's uprate value
      * @return
      */
-    public float getUpRate() {
+    public synchronized double getUpRate() {
         return this.upRate;
     }
 
@@ -201,7 +210,7 @@ public class Client implements Comparable<Object> {
      * get client's downrate value
      * @return
      */
-    public float getDownRate() {
+    public synchronized double getDownRate() {
         return this.downRate;
     }
 
@@ -209,16 +218,25 @@ public class Client implements Comparable<Object> {
      * Set the client's up rate value
      * @param r
      */
-    public void updateUpRate(float r) {
-        this.upRate = r;
+    public synchronized void updateUpRate(double r) {
+        if (upRate != 0) { // test whether this is explicitly initialized
+            upRate = (upRate + r) / 2;
+        } else {
+            upRate = r;
+        }
     }
 
     /**
      * Set the client's down rate value
      * @param r
      */
-    public void updateDownRate(float r) {
-        this.downRate = r;
+    public synchronized void updateDownRate(double r) {
+        if (downRate != 0) { // // test whether this is explicitly initialized
+            downRate = (r + downRate) / 2;
+        } else {
+            downRate = r;
+        }
+        
     }
 
     /**
@@ -270,6 +288,110 @@ public class Client implements Comparable<Object> {
         this.switchTimer.cancel();
         this.switchTimer.purge();
     }
+    
+    /**
+     * update current record of ap signal levels
+     * the input follows this type: ssid1&bssid1&level1|ssid2&bssid2&level2|...
+     *
+     * @param fields: this is the context collect from the client
+     */
+    public synchronized void updateLocationInfo(String[] fields) {
+        apScanningTime++;  // add one for every time it receive scanning results
+        
+        for (int i = 0; i < fields.length; i++) {
+            String[] info = fields[i].split("&");
+            // String ssid = info[0];
+            String bssid = info[1].toLowerCase();
+            int level = Integer.parseInt(info[2]);
+
+            if (apSignalLevelMap.containsKey(bssid)) {
+                // make sure every bssid list has the same size
+                // user the same value for missing ones
+                int size = apSignalLevelMap.get(bssid).size();
+                for (int j = size; j < (apScanningTime - 1); j++) {
+                    apSignalLevelMap.get(bssid).add(level);
+                }
+                apSignalLevelMap.get(bssid).add(level); 
+            } else {
+                List<Integer> signalLevelList = new ArrayList<Integer>();
+                for (int j = 1; j < apScanningTime; j++) {
+                    // set the same value for missing ones
+                    signalLevelList.add(level);
+                }
+                signalLevelList.add(level);
+                apSignalLevelMap.put(bssid, signalLevelList);
+            }
+        }
+        
+    }
+    
+    public Set<String> getNearbyAPSet() {
+        return apSignalLevelMap.keySet();
+    }
+    
+    public int getAPScanningTime() {
+        return apScanningTime;
+    }
+    
+    /**
+     * calculate client mobility metric
+     *
+     * @param bssid
+     */
+    public double mobilityPrediction(String bssid) {
+        List<Integer> signalLevelList = apSignalLevelMap.get(bssid);
+        double mobility, level;
+        
+        if (signalLevelList == null) {
+            throw new RuntimeException("invalid parameter for evaluation");
+        }
+        
+        int s1 = signalLevelList.get(0);
+        int s2 = signalLevelList.get(1);
+        int s3 = signalLevelList.get(2);
+        
+        if (s1 <= s2 && s2 <= s3 && s3 - s1 > 3) { // definitely getting closer
+            mobility = 1;
+        } else if (s1 >= s2 && s2 >= s3 && s1 - s3 > 3) { // getting further
+            mobility = 0.7;
+        } else if (s1 <= s2 && s1 - s3 > 3) { // signal level first increases, but finally drops
+            mobility = 0.8;
+        } else if (s1 > s2 && s3 - s1 > 3) { // signal level first drops, but finally increases
+            mobility = 0.9;
+        } else {  // moving direction is not very clear
+            mobility = 0.85;
+        }
+        
+        if (s3 > -70) {
+            level = 1;
+        } else { // bad signal level
+            level = 0.5;
+        }
+        
+        log.info("mobility records for ap " + bssid + ": " + s1 + ", " + s2 + ", " + s3);
+        log.info("mobility predition for ap " + bssid + ": " + mobility + " * " + level);
+        return mobility * level;
+    }
+    
+    public double signalEvaluation(String bssid) {
+        List<Integer> signalLevelList = apSignalLevelMap.get(bssid);
+        double result;
+        
+        if (signalLevelList == null) {
+            throw new RuntimeException("invalid parameter for evaluation");
+        }
+        
+        int s = signalLevelList.get(2);
+        if (s >= -50) {
+            s = -40;
+        }
+        result = mobilityPrediction(bssid) * (s + 100) / 90;
+        
+        log.info("signal evaluation for ap " + bssid + ": signalLevel=" + s + ", result=" + result);
+        return result;
+    }
+    
+    
 
     @Override
     public String toString() {
@@ -277,7 +399,7 @@ public class Client implements Comparable<Object> {
 
         builder.append("Client " + hwAddress.toString() + ", ipAddr="
                 + ipAddress.getHostAddress() + ", uprate="
-                + Float.toString(upRate) + ", downrate=" + Float.toString(downRate)
+                + Double.toString(upRate) + ", downrate=" + Double.toString(downRate)
                 + ", dpid=" + Long.toString(ofSwitch.getId()));
 
         return builder.toString();

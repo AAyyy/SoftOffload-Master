@@ -357,7 +357,11 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         double r1 = Double.parseDouble(upRate);
         double r2 = Double.parseDouble(downRate);
-        apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
+        Client clt = apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
+        
+        if (clt != null) { // update client info in the master
+            allClientMap.put(clientEthAddr.toLowerCase(), clt);
+        }
     }
 
     synchronized void receiveTimestamp() {
@@ -614,19 +618,26 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     if (agent.getBSSID().toLowerCase().equals(bssid)) {
                         double rate, restRate, agentRate;
                         if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
-                            rate = clt.getDownRate() / 5000;
-                            agentRate = agent.getDownRate() / 5000;
+                            rate = clt.getDownRate() * 8 / 1000;
+                            agentRate = agent.getDownRate() * 8 / 1000;
                             double agentDownBW = agent.getDownlinkBW();
+                            if (agentRate > agentDownBW) {
+                                agentRate = agentDownBW;
+                            }
                             
                             if (rate >= agentDownBW) {
+                                rate = agentDownBW;
                                 restRate = agentDownBW;
                             } else {
-                                restRate = agent.getDownlinkBW() - agentRate + rate;
+                                restRate = agentDownBW - agentRate + rate;
+                                if (restRate > agentDownBW) {
+                                    restRate = agentDownBW;
+                                }
                             }
                             
                             log.info("rate values of current ap: rate=" + rate + ", restRate=" + restRate);
                         } else { // estimated bandwidth for client
-                            agentRate = agent.getDownRate() / 5000;
+                            agentRate = agent.getDownRate() * 8 / 1000;
                             rate = agent.getDownlinkBW() - agentRate;
                             restRate = rate;
                             log.info("rate values of different ap: rate=" + rate + ", restRate=" + restRate);
@@ -685,38 +696,41 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.info("candidate: " + candidateBSSID + ", metric: " + metric);
             
             if (candidateBSSID != null) {
-                for (APAgent agent: apAgentMap.values()) {
-                    if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
-                        // System.out.println(agent.toString());
-                        IOFSwitch sw = clt.getSwitch();
-                        List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
-                        
-                        byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
-                                                + agent.getSSID() + "|"
-                                                + agent.getBSSID() + "|"
-                                                + agent.getAuth());
-                        clt.getAgent().send(msg);
-                        
-                        // change old OF flow entries
-                        // this may not needed if candidate is connected to a different OFswitch
-                        changeOFFlowOutport(matchList, sw, agent.getOFPort());
-                        
-                        log.info("ask client (" + fields[1] + ") to switch to " + agent.getSSID());
+                if (candidateBSSID.equals(clt.getAgent().getBSSID())) {
+                    log.info("no other AP is better for offloading!");
+                } else {
+                    for (APAgent agent: apAgentMap.values()) {
+                        if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
+                            // System.out.println(agent.toString());
+                            IOFSwitch sw = clt.getSwitch();
+                            List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
+                            
+                            byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
+                                                    + agent.getSSID() + "|"
+                                                    + agent.getBSSID() + "|"
+                                                    + agent.getAuth());
+                            clt.getAgent().send(msg);
+                            
+                            // change old OF flow entries
+                            // this may not needed if candidate is connected to a different OFswitch
+                            changeOFFlowOutport(matchList, sw, agent.getOFPort());
+                            
+                            log.info("ask client (" + fields[1] + ") to switch to " + agent.getSSID());
 
-                        break;
+                            break;
+                        }
                     }
+                    log.error("can not find this agent for offloading: " + candidateBSSID);
                 }
-                log.error("can not find this agent for offloading: " + candidateBSSID);
                 
             } else if (enableCellular == true) {
                 byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
                 clt.getAgent().send(msg);
                 log.info("ask client to use cellular network");
-            }
-            
+            }   
         }
-        
     }
+    
     
     void changeOFFlowOutport(List<OFMatch> matchList, IOFSwitch sw, short outPort) {
         OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);

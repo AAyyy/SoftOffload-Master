@@ -296,16 +296,16 @@ public class APAgent implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public void addClient(final MACAddress clientHwAddress, final InetAddress ipv4Address) {
-        // we use lower case keys for the clientMap
-        String mac = clientHwAddress.toString().toLowerCase();
+    // public void addClient(final MACAddress clientHwAddress, final InetAddress ipv4Address) {
+        // // we use lower case keys for the clientMap
+        // String mac = clientHwAddress.toString().toLowerCase();
 
-        if (ofSwitch != null) {
-            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, ofSwitch, this));
-        } else {
-            clientMap.put(mac, new Client(clientHwAddress, ipv4Address, this));
-        }
-    }
+        // if (ofSwitch != null) {
+            // clientMap.put(mac, new Client(clientHwAddress, ipv4Address, ofSwitch, this));
+        // } else {
+            // clientMap.put(mac, new Client(clientHwAddress, ipv4Address, this));
+        // }
+    // }
 
     /**
      * Add a client to the agent tracker
@@ -500,7 +500,7 @@ public class APAgent implements Comparable<Object> {
      * @param clientEthAddr, client mac address
      * @param rate, client's byte rate of ip flows
      */
-    void receiveClientRate(final String clientEthAddr, final double uprate,
+    Client receiveClientRate(final String clientEthAddr, final double uprate,
                             final double downrate) {
 
         String mac = clientEthAddr.toLowerCase();
@@ -518,43 +518,10 @@ public class APAgent implements Comparable<Object> {
                 log.info("FlowRate = {}bytes/s: suspicious flow, " +
                         "drop matched pkts", Double.toString(uprate));
 
-                OFMatch match = new OFMatch();
-                match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
-                                                 .matchOn(Flag.DL_TYPE)
-                                                 .matchOn(Flag.NW_SRC)
-                                                 .withNwSrcMask(32));
-                match.setDataLayerSource(mac)
-                     .setDataLayerType((short)0x0800)
-                     .setNetworkSource(IPv4.toIPv4Address(clt.getIpAddress().getAddress()));
-
-                OFFlowMod flowMod = new OFFlowMod();
-                // set no action to drop
-                List<OFAction> actions = new ArrayList<OFAction>();
-
-                // set flow_mod
-                flowMod.setCookie(67);   // some value chosen randomly
-                flowMod.setPriority((short)200);
-                flowMod.setOutPort(OFPort.OFPP_NONE);
-                flowMod.setMatch(match);
-                // this buffer_id is needed for avoiding a BAD_REQUEST error
-                flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-                flowMod.setHardTimeout((short) 0);
-                flowMod.setIdleTimeout((short) 20);
-                flowMod.setActions(actions);
-                flowMod.setCommand(OFFlowMod.OFPFC_MODIFY);
-
-                // send flow_mod
-
-                try {
-                    sw.write(flowMod, null);
-                    sw.flush();
-                } catch (IOException e) {
-                    log.error("tried to write flow_mod to {} but failed: {}",
-                                sw.getId(), e.getMessage());
-                } catch (Exception e) {
-                    log.error("Failure to modify flow entries", e);
-                }
+                dropFlow(sw, clt, mac);
             }
+            
+            return clt;
         } else {
             log.warn("Received uninilized Client rate info, checking with agent...");
             
@@ -566,8 +533,50 @@ public class APAgent implements Comparable<Object> {
             System.arraycopy(signal, 0, message, 0, signal.length);
             System.arraycopy(m, 0, message, signal.length, m.length);
             this.send(message);
+            
+            return null;
         }
     }
+    
+    public void dropFlow(IOFSwitch sw, Client clt, String mac) {
+        OFMatch match = new OFMatch();
+        match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
+                                         .matchOn(Flag.DL_TYPE)
+                                         .matchOn(Flag.NW_SRC)
+                                         .withNwSrcMask(32));
+        match.setDataLayerSource(mac)
+             .setDataLayerType((short)0x0800)
+             .setNetworkSource(IPv4.toIPv4Address(clt.getIpAddress().getAddress()));
+
+        OFFlowMod flowMod = new OFFlowMod();
+        // set no action to drop
+        List<OFAction> actions = new ArrayList<OFAction>();
+
+        // set flow_mod
+        flowMod.setCookie(67);   // some value chosen randomly
+        flowMod.setPriority((short)200);
+        flowMod.setOutPort(OFPort.OFPP_NONE);
+        flowMod.setMatch(match);
+        // this buffer_id is needed for avoiding a BAD_REQUEST error
+        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+        flowMod.setHardTimeout((short) 0);
+        flowMod.setIdleTimeout((short) 20);
+        flowMod.setActions(actions);
+        flowMod.setCommand(OFFlowMod.OFPFC_MODIFY);
+
+        // send flow_mod
+
+        try {
+            sw.write(flowMod, null);
+            sw.flush();
+        } catch (IOException e) {
+            log.error("tried to write flow_mod to {} but failed: {}",
+                        sw.getId(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Failure to modify flow entries", e);
+        }
+    }
+   
 
 
     @Override

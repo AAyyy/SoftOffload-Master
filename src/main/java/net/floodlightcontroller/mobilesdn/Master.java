@@ -365,7 +365,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     synchronized void receiveTimestamp() {
-        log.debug("receive start timestamp for client downloading!");
+        log.debug("Received start timestamp for client downloading!");
         startTime = System.currentTimeMillis();
     }
 
@@ -571,7 +571,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     void receiveCltAppInfo(String cltEthAddr, String app) {
-        log.debug("received app info from " + cltEthAddr + " - " + app);
+        log.debug("Received app info from " + cltEthAddr + " - " + app);
         MACAddress macAddr = MACAddress.valueOf(cltEthAddr);
         Client clt = allClientMap.get(cltEthAddr);
 
@@ -596,17 +596,17 @@ public class Master implements IFloodlightModule, IFloodlightService,
     // keys
     void receiveScanResult(String[] fields) {
 
-        log.info("received scan result from " + fields[1]);
+        log.info("Received scan result from " + fields[1]);
         MACAddress macAddr = MACAddress.valueOf(fields[1]);
         Client clt = allClientMap.get(macAddr.toString().toLowerCase());
         if (clt == null) {
-            log.warn("request from unknown client " + fields[1] + ", discard it...");
+            log.warn("Request from unknown client " + fields[1] + ", discard it...");
             return;
         }
         
         clt.updateLocationInfo(Arrays.copyOfRange(fields, 2, fields.length - 1));
         if (clt.getAPScanningTime() == 3) {
-            log.info("preparing offloading...");
+            log.info("Preparing offloading...");
             Map<String, Double> apBandwidthUtilizationMap = new HashMap<String, Double>();
             Map<String, Double> cltPotentialRateMap = new HashMap<String, Double>();
             
@@ -697,7 +697,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
             
             if (candidateBSSID != null) {
                 if (candidateBSSID.equals(clt.getAgent().getBSSID())) {
-                    log.info("no other AP is better for offloading!");
+                    log.info("No other AP is better for offloading!");
                 } else {
                     for (APAgent agent: apAgentMap.values()) {
                         if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
@@ -715,18 +715,18 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             // this may not needed if candidate is connected to a different OFswitch
                             changeOFFlowOutport(matchList, sw, agent.getOFPort());
                             
-                            log.info("ask client (" + fields[1] + ") to switch to " + agent.getSSID());
+                            log.info("Ask client (" + fields[1] + ") to switch to " + agent.getSSID());
 
                             break;
                         }
                     }
-                    log.error("can not find this agent for offloading: " + candidateBSSID);
+                    log.error("Can not find this agent for offloading: " + candidateBSSID);
                 }
                 
             } else if (enableCellular == true) {
                 byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
                 clt.getAgent().send(msg);
-                log.info("ask client to use cellular network");
+                log.info("Ask client to use cellular network");
             }   
         }
     }
@@ -751,7 +751,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 sw.write(flowMod, null);
                 sw.flush();
             } catch (IOException e) {
-                log.error("tried to write flow_mod to {} but failed: {}",
+                log.error("Tried to write flow_mod to {} but failed: {}",
                             sw.getId(), e.getMessage());
             } catch (Exception e) {
                 log.error("Failure to modify flow entries", e);
@@ -797,7 +797,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 }
             }
         } catch (Exception e) {
-            log.error("fail to retriev flow entry from switch " + sw.toString(), e);
+            log.error("Fail to retriev flow entry from switch " + sw.toString(), e);
         }
         
         return matchList;

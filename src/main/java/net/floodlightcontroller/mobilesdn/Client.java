@@ -51,6 +51,7 @@ public class Client implements Comparable<Object> {
     private double upRate;
     private double downRate;
     private long connectTime;
+    private long lastRecvTime = 0;
 
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
@@ -296,6 +297,20 @@ public class Client implements Comparable<Object> {
      * @param fields: this is the context collect from the client
      */
     public synchronized void updateLocationInfo(String[] fields) {
+        long currTime = System.currentTimeMillis();
+        if (lastRecvTime == 0) {
+            lastRecvTime = currTime;
+        } else if (currTime - lastRecvTime >= 4000) {
+            apScanningTime = 0;
+            apSignalLevelMap.clear();
+            lastRecvTime = currTime;
+        }
+        
+        if (apScanningTime == 3) { // clear old data, now the program runs in a simple way
+            apSignalLevelMap.clear();
+            apScanningTime = 0;
+        }
+        
         apScanningTime++;  // add one for every time it receive scanning results
         
         for (int i = 0; i < fields.length; i++) {
@@ -325,11 +340,11 @@ public class Client implements Comparable<Object> {
         
     }
     
-    public Set<String> getNearbyAPSet() {
+    public synchronized Set<String> getNearbyAPSet() {
         return apSignalLevelMap.keySet();
     }
     
-    public int getAPScanningTime() {
+    public synchronized int getAPScanningTime() {
         return apScanningTime;
     }
     

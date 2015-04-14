@@ -377,7 +377,7 @@ public class Client implements Comparable<Object> {
             mobility = 0.85;
         }
         
-        if (s3 > -70) {
+        if (s3 > -75) {
             level = 1;
         } else { // bad signal level
             level = 0.5;

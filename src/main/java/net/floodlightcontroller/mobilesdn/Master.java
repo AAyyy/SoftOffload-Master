@@ -74,7 +74,6 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 // import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.mobilesdn.ClickManageServer;
 import net.floodlightcontroller.packet.Ethernet;
-// import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.storage.IStorageSourceListener;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.util.MACAddress;
@@ -527,10 +526,13 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     
                     // send management data
                     if (cltWithMaxRate != null) {
-                        byte[] message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "app");
+                        byte[] message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "motion");
+                        agent.send(message);
+                        
+                        message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "app");
                         agent.send(message);
                         log.info("Send message to agent " + agent.getSSID() 
-                                + " for collecting client app info");
+                                + " for collecting client motion and app info");
                     }
                 }
             
@@ -604,8 +606,12 @@ public class Master implements IFloodlightModule, IFloodlightService,
             return;
         }
         
-        clt.updateLocationInfo(Arrays.copyOfRange(fields, 2, fields.length - 1));
-        if (clt.getAPScanningTime() == 3) {
+        clt.updateSignalInfo(Arrays.copyOfRange(fields, 3, fields.length - 1));
+        if (fields[2].toLowerCase().equals("static")) {
+            clt.updateStaticFlag(true);
+        }
+        
+        if (clt.isReadyToOffload()) {
             log.info("Preparing offloading...");
             Map<String, Double> apBandwidthUtilizationMap = new HashMap<String, Double>();
             Map<String, Double> cltPotentialRateMap = new HashMap<String, Double>();
@@ -653,6 +659,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     }
                 }
             }
+        
             
             // log.info("maxPotentialRate=" + maxPotentialRate);
             
@@ -671,11 +678,11 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     }
                     double rate = cltPotentialRateMap.get(bssid);
                     double restRateUtilization = apBandwidthUtilizationMap.get(bssid);
-                    double evaluationMetric = signalMetric + rate / maxPotentialRate 
+                    double evaluationMetric = signalMetric * rate / maxPotentialRate 
                                                     * restRateUtilization
                                                     - overheadMetric;
                     
-                    log.info("metric for AP " + bssid + ": " + signalMetric + " + " 
+                    log.info("metric for AP " + bssid + ": " + signalMetric + " * " 
                                 + rate + " / " + maxPotentialRate + " * " + restRateUtilization
                                 + " - " + overheadMetric + " = " + evaluationMetric);
                     
@@ -699,6 +706,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 if (candidateBSSID.equals(clt.getAgent().getBSSID())) {
                     log.info("No other AP is better for offloading!");
                 } else {
+                    boolean isOffloadingPerformed = false;
                     for (APAgent agent: apAgentMap.values()) {
                         if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
                             // System.out.println(agent.toString());
@@ -717,10 +725,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             
                             log.info("Ask client (" + fields[1] + ") to switch to " + agent.getSSID());
 
+                            isOffloadingPerformed = true;
                             break;
                         }
                     }
-                    log.error("Can not find this agent for offloading: " + candidateBSSID);
+                    
+                    if (!isOffloadingPerformed) {
+                        log.error("Can not find this agent for offloading: " + candidateBSSID);
+                    }
                 }
                 
             } else if (enableCellular == true) {

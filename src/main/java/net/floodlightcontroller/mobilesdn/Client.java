@@ -53,6 +53,8 @@ public class Client implements Comparable<Object> {
     private long connectTime;
     private long lastRecvTime = 0;
 
+    private boolean isStatic = false;
+    
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
     // used to record nearby ap signal levels
@@ -296,7 +298,7 @@ public class Client implements Comparable<Object> {
      *
      * @param fields: this is the context collect from the client
      */
-    public synchronized void updateLocationInfo(String[] fields) {
+    public synchronized void updateSignalInfo(String[] fields) {
         long currTime = System.currentTimeMillis();
         if (lastRecvTime == 0) {
             lastRecvTime = currTime;
@@ -340,6 +342,23 @@ public class Client implements Comparable<Object> {
         
     }
     
+    public boolean isStatic() {
+        return isStatic;
+    }
+    
+    public void updateStaticFlag(boolean t) {
+        isStatic = t;
+    }
+    
+    public boolean isReadyToOffload() {
+        boolean result = false;
+        if (isStatic || getAPScanningTime() == 3) {
+            result = true;
+        }
+        
+        return result;
+    }
+    
     public synchronized Set<String> getNearbyAPSet() {
         return apSignalLevelMap.keySet();
     }
@@ -355,7 +374,7 @@ public class Client implements Comparable<Object> {
      */
     public double mobilityPrediction(String bssid) {
         List<Integer> signalLevelList = apSignalLevelMap.get(bssid);
-        double mobility, level;
+        double mobility;
         
         if (signalLevelList == null) {
             throw new RuntimeException("invalid parameter for evaluation");
@@ -377,30 +396,28 @@ public class Client implements Comparable<Object> {
             mobility = 0.85;
         }
         
-        if (s3 > -75) {
-            level = 1;
-        } else { // bad signal level
-            level = 0.5;
-        }
-        
         log.info("mobility records for ap " + bssid + ": " + s1 + ", " + s2 + ", " + s3);
-        log.info("mobility predition for ap " + bssid + ": " + mobility + " * " + level);
-        return mobility * level;
+        log.info("mobility predition for ap " + bssid + ": " + mobility);
+        return mobility;
     }
     
     public double signalEvaluation(String bssid) {
         List<Integer> signalLevelList = apSignalLevelMap.get(bssid);
+        int s;
         double result;
         
         if (signalLevelList == null) {
-            throw new RuntimeException("invalid parameter for evaluation");
+            throw new java.util.NoSuchElementException("invalid parameter for evaluation");
         }
         
-        int s = signalLevelList.get(2);
-        if (s >= -50) {
-            s = -40;
+        if (isStatic()) {
+            s = signalLevelList.get(0);
+            result = 1 - Math.exp((-1.0 / 3.0) * (s + 73));
+        } else {
+            s = signalLevelList.get(2);
+            result = mobilityPrediction(bssid) * (1- Math.exp((-1.0 / 3.0) * (s + 73)));
         }
-        result = mobilityPrediction(bssid) * (s + 100) / 90;
+        
         
         log.info("signal evaluation for ap " + bssid + ": signalLevel=" + s + ", result=" + result);
         return result;

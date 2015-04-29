@@ -4,13 +4,13 @@ SoftOffload Master is an extended Floodlight controller for mobile traffic offlo
 
 We develop our [offloading master](https://github.com/TKTL-SDN/SoftOffload-Master/tree/eit-sdn/src/main/java/net/floodlightcontroller/mobilesdn) on Floodlight as an extension application. To facilitate system building, the rest of Floodlight code is also included in this repo.
 
-Our current SoftOffload master does not support Floodlight v1.0+, which switches to OpenFlowJ-Loxigen for implementing the OpenFlow protocol.
+Our current SoftOffload master does **not** support Floodlight v1.0+, which switches to OpenFlowJ-Loxigen for implementing the OpenFlow protocol.
 
 ## Usage
 
 ### Download the code
 
-    git clone https://github.com/TKTL-SDN/SoftOffload-Master.git
+    $ git clone https://github.com/TKTL-SDN/SoftOffload-Master.git
 
 ### Building and Running
 

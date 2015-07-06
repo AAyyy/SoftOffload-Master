@@ -65,6 +65,7 @@ public class Client implements Comparable<Object> {
 
     // defaults
     static private final long SECONDS = 3 * 60 * 1000;
+    private static final int DELAY = 6000; // 6000 milliseconds
 
     // currently not used anymore, for testing before
     private void initializeClientTimer() {
@@ -301,12 +302,12 @@ public class Client implements Comparable<Object> {
     public synchronized void updateSignalInfo(String[] fields) {
         long currTime = System.currentTimeMillis();
         if (lastRecvTime == 0) {
-            lastRecvTime = currTime;
-        } else if (currTime - lastRecvTime >= 4000) {
+            // do nothing
+        } else if (currTime - lastRecvTime >= DELAY) {
             apScanningTime = 0;
             apSignalLevelMap.clear();
-            lastRecvTime = currTime;
-        }
+        } 
+        lastRecvTime = currTime; // update
         
         if (apScanningTime == 3) { // clear old data, now the program runs in a simple way
             apSignalLevelMap.clear();
@@ -340,6 +341,7 @@ public class Client implements Comparable<Object> {
             }
         }
         
+        log.info("Update signal level info -- time " + apScanningTime);
     }
     
     public boolean isStatic() {

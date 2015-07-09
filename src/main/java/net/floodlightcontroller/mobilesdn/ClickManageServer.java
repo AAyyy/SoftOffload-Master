@@ -157,6 +157,9 @@ class ClickManageServer implements Runnable {
 
                 clientDisconnect(agentAddr, clientEthAddr);
             } else if (msg_type.equals(MSG_CLIENT_SCAN)) {
+                
+                //System.out.println("????++++---- " + msg);
+                
                 receiveScanResult(fields);
             } else if (msg_type.equals(MSG_CLT_APP)) {
                 // System.out.println(fields[2]);

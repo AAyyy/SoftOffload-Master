@@ -525,12 +525,13 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     System.out.println(rateMap.toString());
                     
                     // send management data
-                    if (cltWithMaxRate != null) {
+                    if (cltWithMaxRate != null && !cltWithMaxRate.isBeningEvaluated()) {
                         byte[] message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "motion");
                         agent.send(message);
                         
                         message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "app");
                         agent.send(message);
+                        cltWithMaxRate.startOffloadingEvaluation();
                         log.info("Send message to agent " + agent.getSSID() 
                                 + " for collecting client motion and app info");
                     }
@@ -605,7 +606,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.warn("Request from unknown client " + fields[1] + ", discard it...");
             return;
         }
-        
+
         clt.updateSignalInfo(Arrays.copyOfRange(fields, 3, fields.length - 1));
         if (fields[2].toLowerCase().equals("static")) {
             clt.updateStaticFlag(true);
@@ -615,13 +616,24 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.info("Preparing offloading...");
             Map<String, Double> apBandwidthUtilizationMap = new HashMap<String, Double>();
             Map<String, Double> cltPotentialRateMap = new HashMap<String, Double>();
+
+            //System.out.println("*****************");
+            //System.out.println(apAgentMap.toString());
+            //System.out.println("******************");
             
             // get max rate value
             Set<String> apSet = clt.getNearbyAPSet();
+            
+            //System.out.println("+++++++++++++ " + apSet.toString());
+            
             double maxPotentialRate = 0;
             for (String bssid: apSet) {
                 for (APAgent agent: apAgentMap.values()) {
                     if (agent.getBSSID().toLowerCase().equals(bssid)) {
+                        
+                        //System.out.println("---------" + bssid);
+
+
                         double rate, restRate, agentRate;
                         if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
                             rate = clt.getDownRate() * 8 / 1000;
@@ -662,7 +674,10 @@ public class Master implements IFloodlightModule, IFloodlightService,
         
             
             // log.info("maxPotentialRate=" + maxPotentialRate);
-            
+           
+            //System.out.println("-------------- " + cltPotentialRateMap.toString());
+            //System.out.println("-------------- " + apBandwidthUtilizationMap.toString());
+
             // evaluate each AP
             String candidateBSSID = null;
             double metric = 0;
@@ -739,7 +754,9 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
                 clt.getAgent().send(msg);
                 log.info("Ask client to use cellular network");
-            }   
+            }
+            
+            clt.finishOffloadingEvaluation();
         }
     }
     

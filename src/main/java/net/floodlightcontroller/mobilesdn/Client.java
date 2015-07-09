@@ -54,6 +54,7 @@ public class Client implements Comparable<Object> {
     private long lastRecvTime = 0;
 
     private boolean isStatic = false;
+    private boolean isBeingEvaluated = false;
     
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
@@ -65,6 +66,7 @@ public class Client implements Comparable<Object> {
 
     // defaults
     static private final long SECONDS = 3 * 60 * 1000;
+    private static final int DELAY = 6000;
 
     // currently not used anymore, for testing before
     private void initializeClientTimer() {
@@ -292,6 +294,18 @@ public class Client implements Comparable<Object> {
         this.switchTimer.purge();
     }
     
+    public synchronized void startOffloadingEvaluation() {
+    	isBeingEvaluated = true;
+    }
+    
+    public synchronized void finishOffloadingEvaluation() {
+    	isBeingEvaluated = false;
+    }
+    
+    public synchronized boolean isBeningEvaluated() {
+    	return isBeingEvaluated;
+    }
+    
     /**
      * update current record of ap signal levels
      * the input follows this type: ssid1&bssid1&level1|ssid2&bssid2&level2|...
@@ -301,12 +315,13 @@ public class Client implements Comparable<Object> {
     public synchronized void updateSignalInfo(String[] fields) {
         long currTime = System.currentTimeMillis();
         if (lastRecvTime == 0) {
-            lastRecvTime = currTime;
-        } else if (currTime - lastRecvTime >= 4000) {
+            // do nothing
+        } else if (currTime - lastRecvTime >= DELAY) {
             apScanningTime = 0;
             apSignalLevelMap.clear();
-            lastRecvTime = currTime;
         }
+
+        lastRecvTime = currTime;
         
         if (apScanningTime == 3) { // clear old data, now the program runs in a simple way
             apSignalLevelMap.clear();
@@ -323,7 +338,7 @@ public class Client implements Comparable<Object> {
 
             if (apSignalLevelMap.containsKey(bssid)) {
                 // make sure every bssid list has the same size
-                // user the same value for missing ones
+                // use the same value for missing ones
                 int size = apSignalLevelMap.get(bssid).size();
                 for (int j = size; j < (apScanningTime - 1); j++) {
                     apSignalLevelMap.get(bssid).add(level);
@@ -339,7 +354,9 @@ public class Client implements Comparable<Object> {
                 apSignalLevelMap.put(bssid, signalLevelList);
             }
         }
-        
+
+
+        log.info("Update signal level info -- time " + apScanningTime);
     }
     
     public boolean isStatic() {

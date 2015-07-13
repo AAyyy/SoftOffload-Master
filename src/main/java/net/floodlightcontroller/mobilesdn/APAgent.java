@@ -62,8 +62,8 @@ public class APAgent implements Comparable<Object> {
     private short ofPort;
     private double downlinkBW;
 
-    private double upRate;
-    private double downRate;
+    private double upRate;      // up rate of agent eth port
+    private double downRate;	// down rate of agent eht port
     private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
@@ -158,7 +158,7 @@ public class APAgent implements Comparable<Object> {
      * get AP's total up rate value
      * @return
      */
-    public double getUpRate() {
+    public synchronized double getUpRate() {
         return this.upRate;
     }
 
@@ -166,7 +166,7 @@ public class APAgent implements Comparable<Object> {
      * Set the AP's up rate value
      * @param r
      */
-    public void updateUpRate(double r) {
+    public synchronized void updateUpRate(double r) {
         this.upRate = r;
     }
 
@@ -174,7 +174,7 @@ public class APAgent implements Comparable<Object> {
      * get AP's total down rate value
      * @return downRate (float)
      */
-    public double getDownRate() {
+    public synchronized double getDownRate() {
         return this.downRate;
     }
 
@@ -182,7 +182,7 @@ public class APAgent implements Comparable<Object> {
      * Set the AP's down rate value
      * @param r
      */
-    public void updateDownRate(double r) {
+    public synchronized void updateDownRate(double r) {
         this.downRate = r;
     }
 

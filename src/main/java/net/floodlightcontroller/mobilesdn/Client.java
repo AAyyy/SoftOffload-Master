@@ -50,6 +50,9 @@ public class Client implements Comparable<Object> {
     private String app = "trivial";
     private double upRate;
     private double downRate;
+    private long ofUpBytes = 0;
+    private long ofDownBytes = 0;
+    
     private long connectTime;
     private long lastRecvTime = 0;
 
@@ -242,6 +245,27 @@ public class Client implements Comparable<Object> {
             downRate = r;
         }
         
+    }
+    
+    public synchronized long getOFUpBytes() {
+    	return ofUpBytes;
+    }
+    
+    public synchronized long getOFDownBytes() {
+    	return ofDownBytes;
+    }
+    
+    public synchronized void updateOFUpBytes(long x) {
+    	ofUpBytes = x;
+    }
+    
+    public synchronized void updateOFDownBytes(long x) {
+    	ofDownBytes = x;
+    }
+    
+    public synchronized void rateReset() {
+    	upRate = 0;
+    	downRate = 0;
     }
 
     /**

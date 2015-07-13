@@ -322,7 +322,9 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     /**
-     * Handle a ClientInfo message from an agent.
+     * Handle a agent rate message from an agent.
+     * This function will not be used anymore!!! click agent will not send
+     * rate message!
      *
      * @param AgentAddr
      */
@@ -342,6 +344,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
         // System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
     }
 
+    /**
+     * Handle a client rate message from an agent.
+     * This method will not be used anymore!!! click agent will not send rate
+     * statistics to the master. The corresponding statistics task has been migrated to 
+     * OFClientRateStatistics module based on openflow sw.
+     *
+     * @param AgentAddr
+     */    
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
             final String clientIpAddr, final String upRate, final String downRate) {
 
@@ -636,8 +646,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
                         double rate, restRate, agentRate;
                         if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
-                            rate = clt.getDownRate() * 8 / 1000;
-                            agentRate = agent.getDownRate() * 8 / 1000;
+                            rate = clt.getDownRate() / 1000000;
+                            agentRate = agent.getDownRate() / 1000000;
                             double agentDownBW = agent.getDownlinkBW();
                             if (agentRate > agentDownBW) {
                                 agentRate = agentDownBW;
@@ -655,7 +665,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             
                             log.info("rate values of current ap: rate=" + rate + ", restRate=" + restRate);
                         } else { // estimated bandwidth for client
-                            agentRate = agent.getDownRate() * 8 / 1000;
+                            agentRate = agent.getDownRate() / 1000000;
                             rate = agent.getDownlinkBW() - agentRate;
                             restRate = rate;
                             log.info("rate values of different ap: rate=" + rate + ", restRate=" + restRate);
@@ -931,6 +941,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // Statistics
         executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
+        executor.execute(new OFRateStatistics(this.floodlightProvider, this, monitorInterval));
     }
 
     private void parseNetworkConfig(String networkTopoFile) {

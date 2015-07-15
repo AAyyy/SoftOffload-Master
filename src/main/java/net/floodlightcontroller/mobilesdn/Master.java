@@ -644,37 +644,41 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         //System.out.println("---------" + bssid);
 
 
-                        double rate, restRate, agentRate;
+                        double rate, restRate, otherCltRate, agentRate;
                         if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
                             rate = clt.getDownRate() / 1000000;
-                            agentRate = agent.getDownRate() / 1000000;
+                            // agentRate = agent.getDownRate() / 1000000;
                             double agentDownBW = agent.getDownlinkBW();
-                            if (agentRate > agentDownBW) {
-                                agentRate = agentDownBW;
+                            // if (agentRate > agentDownBW) {
+                            //     agentRate = agentDownBW;
+                            // }
+                            
+                            otherCltRate = 0;
+                            for (Client c : agent.getAllClients()) {
+                            	if (!c.equals(clt)) {
+                            		otherCltRate += c.getDownRate() / 1000000;
+                            	}
                             }
                             
-                            if (rate >= agentDownBW) {
-                                rate = agentDownBW;
-                                restRate = agentDownBW;
-                            } else {
-                                restRate = agentDownBW - agentRate + rate;
-                                if (restRate > agentDownBW) {
-                                    restRate = agentDownBW;
-                                }
+                            restRate = agentDownBW - otherCltRate;
+                            if (restRate < 0) {
+                            	restRate = 0;
                             }
                             
                             log.info("rate values of current ap: rate=" + rate + ", restRate=" + restRate);
                         } else { // estimated bandwidth for client
                             agentRate = agent.getDownRate() / 1000000;
-                            rate = agent.getDownlinkBW() - agentRate;
-                            restRate = rate;
-                            log.info("rate values of different ap: rate=" + rate + ", restRate=" + restRate);
+                            restRate = agent.getDownlinkBW() - agentRate;
+                            if (restRate < 0) {
+                            	restRate = 0;
+                            }
+                            log.info("rate values of different ap: rate=" + agentRate + ", restRate=" + restRate);
                         }
                         
-                        cltPotentialRateMap.put(bssid, rate);
+                        cltPotentialRateMap.put(bssid, restRate);
                         apBandwidthUtilizationMap.put(bssid, restRate / agent.getDownlinkBW());
-                        if (rate > maxPotentialRate) {
-                            maxPotentialRate = rate;
+                        if (restRate > maxPotentialRate) {
+                            maxPotentialRate = restRate;
                         }
 
                         break;
@@ -1258,6 +1262,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void switchRemoved(long switchId) {
         List<SwitchOutQueue> tempList = new LinkedList<SwitchOutQueue>();
 
+        // remove corresponding agent
+        for (String key: apAgentMap.keySet()) {
+        	if (apAgentMap.get(key).getSwitch().getId() == switchId) {
+        		apAgentMap.remove(key);
+        	}
+        }
+        
+        // remove sw from swQueseList
         for (SwitchOutQueue swqueue: swQueueList) {
             if (swqueue.getSwId() == switchId) {
                 tempList.add(swqueue);
@@ -1291,6 +1303,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                         log.info("Initialize AP " + apConfig.ssid + " (" + apConfig.bssid + ")");
+                        agent.checkClients();
                     } else {
                         log.warn("Unconfiged AP found with siwtch " + swInetAddrStr);
                         log.warn("Initialize AP " + agentInetAddr + " without SSID and BSSID");

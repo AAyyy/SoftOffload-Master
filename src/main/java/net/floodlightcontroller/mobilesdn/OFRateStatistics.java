@@ -129,7 +129,7 @@ public class OFRateStatistics implements Runnable {
             		agentUpRateSum += upRate;
             		agentDownRateSum += downRate;
             		
-            		log.info("clt rate debug: " + clt.getIpAddress().getHostAddress() 
+            		log.debug("clt rate debug: " + clt.getIpAddress().getHostAddress() 
             					+ " -- " + upRate + " - " + downRate);
             	}
             	agent.updateUpRate(agentUpRateSum);

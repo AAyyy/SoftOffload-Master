@@ -538,6 +538,18 @@ public class APAgent implements Comparable<Object> {
         }
     }
     
+    /*
+     *  ask agent to report current info of connected client
+     *  
+     *  this func is used to get client info if master starts later then agent
+     */
+    public void checkClients() {
+    	log.info("Checking clients status on this agent...");
+    	
+    	byte[] message = "arp".getBytes(); // a -- to agent, rp -- report
+    	send(message);
+    }
+    
     public void dropFlow(IOFSwitch sw, Client clt, String mac) {
         OFMatch match = new OFMatch();
         match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)

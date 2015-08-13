@@ -69,6 +69,9 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+// import net.floodlightcontroller.packet.Ethernet;
+// import net.floodlightcontroller.packet.IPv4;
+// import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.mobilesdn.ClickManageServer;
 import net.floodlightcontroller.mobilesdn.web.SoftOffloadWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
@@ -320,7 +323,9 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     /**
-     * Handle a ClientInfo message from an agent.
+     * Handle a agent rate message from an agent.
+     * This function will not be used anymore!!! click agent will not send
+     * rate message!
      *
      * @param AgentAddr
      */
@@ -340,6 +345,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
         // System.out.println(apAgentMap.get(agentAddr.getHostAddress()).toString());
     }
 
+    /**
+     * Handle a client rate message from an agent.
+     * This method will not be used anymore!!! click agent will not send rate
+     * statistics to the master. The corresponding statistics task has been migrated to 
+     * OFClientRateStatistics module based on openflow sw.
+     *
+     * @param AgentAddr
+     */    
     void receiveClientRate(final InetAddress agentAddr, final String clientEthAddr,
             final String clientIpAddr, final String upRate, final String downRate) {
 
@@ -523,12 +536,13 @@ public class Master implements IFloodlightModule, IFloodlightService,
                     System.out.println(rateMap.toString());
                     
                     // send management data
-                    if (cltWithMaxRate != null) {
+                    if (cltWithMaxRate != null && !cltWithMaxRate.isBeningEvaluated()) {
                         byte[] message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "motion");
                         agent.send(message);
                         
                         message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "app");
                         agent.send(message);
+                        cltWithMaxRate.startOffloadingEvaluation();
                         log.info("Send message to agent " + agent.getSSID() 
                                 + " for collecting client motion and app info");
                     }
@@ -613,44 +627,59 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.info("Preparing offloading...");
             Map<String, Double> apBandwidthUtilizationMap = new HashMap<String, Double>();
             Map<String, Double> cltPotentialRateMap = new HashMap<String, Double>();
+
+            //System.out.println("*****************");
+            //System.out.println(apAgentMap.toString());
+            //System.out.println("******************");
             
             // get max rate value
             Set<String> apSet = clt.getNearbyAPSet();
+            
+            //System.out.println("+++++++++++++ " + apSet.toString());
+            
             double maxPotentialRate = 0;
             for (String bssid: apSet) {
                 for (APAgent agent: apAgentMap.values()) {
                     if (agent.getBSSID().toLowerCase().equals(bssid)) {
-                        double rate, restRate, agentRate;
+                        
+                        //System.out.println("---------" + bssid);
+
+
+                        double rate, restRate, otherCltRate, agentRate;
                         if (clt.getAgent().getBSSID().toLowerCase().equals(bssid)) {
-                            rate = clt.getDownRate() * 8 / 1000;
-                            agentRate = agent.getDownRate() * 8 / 1000;
+                            rate = clt.getDownRate() / 1000000;
+                            // agentRate = agent.getDownRate() / 1000000;
                             double agentDownBW = agent.getDownlinkBW();
-                            if (agentRate > agentDownBW) {
-                                agentRate = agentDownBW;
+                            // if (agentRate > agentDownBW) {
+                            //     agentRate = agentDownBW;
+                            // }
+                            
+                            otherCltRate = 0;
+                            for (Client c : agent.getAllClients()) {
+                            	if (!c.equals(clt)) {
+                            		otherCltRate += c.getDownRate() / 1000000;
+                            	}
                             }
                             
-                            if (rate >= agentDownBW) {
-                                rate = agentDownBW;
-                                restRate = agentDownBW;
-                            } else {
-                                restRate = agentDownBW - agentRate + rate;
-                                if (restRate > agentDownBW) {
-                                    restRate = agentDownBW;
-                                }
+                            restRate = agentDownBW - otherCltRate;
+                            if (restRate < 0) {
+                            	restRate = 0;
                             }
                             
                             log.info("rate values of current ap: rate=" + rate + ", restRate=" + restRate);
                         } else { // estimated bandwidth for client
-                            agentRate = agent.getDownRate() * 8 / 1000;
-                            rate = agent.getDownlinkBW() - agentRate;
-                            restRate = rate;
-                            log.info("rate values of different ap: rate=" + rate + ", restRate=" + restRate);
+                            agentRate = agent.getDownRate() / 1000000;
+                            restRate = agent.getDownlinkBW() - agentRate;
+                            if (restRate < 0) {
+                            	restRate = 0;
+                            }
+                            log.info("rate values of different ap: rate=" + agentRate + ", restRate=" + restRate);
                         }
                         
-                        cltPotentialRateMap.put(bssid, rate);
+                        cltPotentialRateMap.put(bssid, restRate);
                         apBandwidthUtilizationMap.put(bssid, restRate / agent.getDownlinkBW());
-                        if (rate > maxPotentialRate) {
-                            maxPotentialRate = rate;
+                        if (restRate > maxPotentialRate) {
+                            maxPotentialRate = restRate;
                         }
 
                         break;
@@ -660,7 +689,10 @@ public class Master implements IFloodlightModule, IFloodlightService,
         
             
             // log.info("maxPotentialRate=" + maxPotentialRate);
-            
+           
+            //System.out.println("-------------- " + cltPotentialRateMap.toString());
+            //System.out.println("-------------- " + apBandwidthUtilizationMap.toString());
+
             // evaluate each AP
             String candidateBSSID = null;
             double metric = 0;
@@ -737,7 +769,9 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 byte[] msg = makeByteMessageToClient(macAddr, "c", "wifioff|");
                 clt.getAgent().send(msg);
                 log.info("Ask client to use cellular network");
-            }   
+            }
+            
+            clt.finishOffloadingEvaluation();
         }
     }
     
@@ -821,17 +855,16 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     @Override
     public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-        Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
-        l.add(ISoftOffloadService.class);
-        return l;
+        return null;
     }
 
     @Override
     public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-        Map<Class<? extends IFloodlightService>, IFloodlightService> m =
-                new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
-        // m.put(Master.class, this);
-        m.put(ISoftOffloadService.class, this);
+        Map<Class<? extends IFloodlightService>,
+        IFloodlightService> m =
+        new HashMap<Class<? extends IFloodlightService>,
+        IFloodlightService>();
+        m.put(Master.class, this);
         return m;
     }
 
@@ -840,7 +873,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         Collection<Class<? extends IFloodlightService>> l =
             new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
-        l.add(IRestApiService.class);
+        // l.add(IRestApiService.class);
         return l;
     }
 
@@ -848,7 +881,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void init(FloodlightModuleContext context)
             throws FloodlightModuleException {
         floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
-        restApi = context.getServiceImpl(IRestApiService.class);
+        // restApi = context.getServiceImpl(IRestApiService.class);
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
     }
@@ -913,10 +946,6 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // Statistics
         executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
-        
-        
-        // web
-        restApi.addRestletRoutable(new SoftOffloadWebRoutable());
     }
 
     private void parseNetworkConfig(String networkTopoFile) {
@@ -1233,6 +1262,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void switchRemoved(long switchId) {
         List<SwitchOutQueue> tempList = new LinkedList<SwitchOutQueue>();
 
+        // remove corresponding agent
+        for (String key: apAgentMap.keySet()) {
+        	if (apAgentMap.get(key).getSwitch().getId() == switchId) {
+        		apAgentMap.remove(key);
+        	}
+        }
+        
+        // remove sw from swQueseList
         for (SwitchOutQueue swqueue: swQueueList) {
             if (swqueue.getSwId() == switchId) {
                 tempList.add(swqueue);
@@ -1266,6 +1303,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                         log.info("Initialize AP " + apConfig.ssid + " (" + apConfig.bssid + ")");
+                        agent.checkClients();
                     } else {
                         log.warn("Unconfiged AP found with siwtch " + swInetAddrStr);
                         log.warn("Initialize AP " + agentInetAddr + " without SSID and BSSID");

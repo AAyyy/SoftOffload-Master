@@ -50,10 +50,14 @@ public class Client implements Comparable<Object> {
     private String app = "trivial";
     private double upRate;
     private double downRate;
+    private long ofUpBytes = 0;
+    private long ofDownBytes = 0;
+    
     private long connectTime;
     private long lastRecvTime = 0;
 
     private boolean isStatic = false;
+    private boolean isBeingEvaluated = false;
     
     private IOFSwitch ofSwitch = null;      // not initialized
     private APAgent agent;
@@ -242,6 +246,27 @@ public class Client implements Comparable<Object> {
         }
         
     }
+    
+    public synchronized long getOFUpBytes() {
+    	return ofUpBytes;
+    }
+    
+    public synchronized long getOFDownBytes() {
+    	return ofDownBytes;
+    }
+    
+    public synchronized void updateOFUpBytes(long x) {
+    	ofUpBytes = x;
+    }
+    
+    public synchronized void updateOFDownBytes(long x) {
+    	ofDownBytes = x;
+    }
+    
+    public synchronized void rateReset() {
+    	upRate = 0;
+    	downRate = 0;
+    }
 
     /**
      * get client's corresponding openflow switch instance
@@ -293,6 +318,18 @@ public class Client implements Comparable<Object> {
         this.switchTimer.purge();
     }
     
+    public synchronized void startOffloadingEvaluation() {
+    	isBeingEvaluated = true;
+    }
+    
+    public synchronized void finishOffloadingEvaluation() {
+    	isBeingEvaluated = false;
+    }
+    
+    public synchronized boolean isBeningEvaluated() {
+    	return isBeingEvaluated;
+    }
+    
     /**
      * update current record of ap signal levels
      * the input follows this type: ssid1&bssid1&level1|ssid2&bssid2&level2|...
@@ -322,7 +359,7 @@ public class Client implements Comparable<Object> {
 
             if (apSignalLevelMap.containsKey(bssid)) {
                 // make sure every bssid list has the same size
-                // user the same value for missing ones
+                // use the same value for missing ones
                 int size = apSignalLevelMap.get(bssid).size();
                 for (int j = size; j < (apScanningTime - 1); j++) {
                     apSignalLevelMap.get(bssid).add(level);

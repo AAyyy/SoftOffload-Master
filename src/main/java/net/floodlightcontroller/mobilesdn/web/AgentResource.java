@@ -19,7 +19,6 @@ public class AgentResource extends ServerResource {
     @Get("json")
     public Collection<APAgent> retrieve() {
         ISoftOffloadService sf = (ISoftOffloadService)getContext().getAttributes().get(ISoftOffloadService.class.getCanonicalName());
-        System.out.println("------------------enter into resource func!");
         return sf.getAgents();
     }
 }

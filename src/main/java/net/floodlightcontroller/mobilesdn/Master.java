@@ -855,16 +855,17 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     @Override
     public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-        return null;
+    	Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+        l.add(ISoftOffloadService.class);
+        return l;
     }
 
     @Override
     public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-        Map<Class<? extends IFloodlightService>,
-        IFloodlightService> m =
-        new HashMap<Class<? extends IFloodlightService>,
-        IFloodlightService>();
-        m.put(Master.class, this);
+        Map<Class<? extends IFloodlightService>, IFloodlightService> m =
+        		new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
+        // m.put(Master.class, this);
+        m.put(ISoftOffloadService.class, this);
         return m;
     }
 
@@ -873,15 +874,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
         Collection<Class<? extends IFloodlightService>> l =
             new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
-        // l.add(IRestApiService.class);
+        l.add(IRestApiService.class);
         return l;
     }
 
     @Override
-    public void init(FloodlightModuleContext context)
-            throws FloodlightModuleException {
+    public void init(FloodlightModuleContext context) throws FloodlightModuleException {
         floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
-        // restApi = context.getServiceImpl(IRestApiService.class);
+        restApi = context.getServiceImpl(IRestApiService.class);
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
     }
@@ -892,7 +892,6 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         floodlightProvider.addOFSwitchListener(this);
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
-        // restApi.addRestletRoutable(new OdinMasterWebRoutable());
 
         // read configure options
         Map<String, String> configOptions = context.getConfigParams(this);
@@ -946,6 +945,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // Statistics
         executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
+        restApi.addRestletRoutable(new SoftOffloadWebRoutable());
     }
 
     private void parseNetworkConfig(String networkTopoFile) {

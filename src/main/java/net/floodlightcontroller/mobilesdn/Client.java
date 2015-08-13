@@ -301,9 +301,7 @@ public class Client implements Comparable<Object> {
      */
     public synchronized void updateSignalInfo(String[] fields) {
         long currTime = System.currentTimeMillis();
-        if (lastRecvTime == 0) {
-            // do nothing
-        } else if (currTime - lastRecvTime >= DELAY) {
+        if (lastRecvTime != 0 && currTime - lastRecvTime >= DELAY) {
             apScanningTime = 0;
             apSignalLevelMap.clear();
         } 
@@ -341,7 +339,7 @@ public class Client implements Comparable<Object> {
             }
         }
         
-        log.info("Update signal level info -- time " + apScanningTime);
+        // log.info("Update signal level info -- time " + apScanningTime);
     }
     
     public boolean isStatic() {

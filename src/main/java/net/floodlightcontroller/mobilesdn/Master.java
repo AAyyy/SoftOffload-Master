@@ -69,11 +69,9 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-// import net.floodlightcontroller.packet.Ethernet;
-// import net.floodlightcontroller.packet.IPv4;
-// import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.mobilesdn.ClickManageServer;
-import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.mobilesdn.web.SoftOffloadWebRoutable;
+import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.storage.IStorageSourceListener;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.util.MACAddress;
@@ -88,7 +86,7 @@ import net.floodlightcontroller.util.MACAddress;
 
 public class Master implements IFloodlightModule, IFloodlightService,
                                   IOFSwitchListener, IOFMessageListener,
-                                  IStorageSourceListener{
+                                  IStorageSourceListener, ISoftOffloadService {
 
 
     private static class APConfig {
@@ -153,7 +151,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     protected static Logger log = LoggerFactory.getLogger(Master.class);
-    // protected IRestApiService restApi;
+    protected IRestApiService restApi;
 
     private IFloodlightProviderService floodlightProvider;
     private ScheduledExecutorService executor;
@@ -823,16 +821,17 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     @Override
     public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-        return null;
+        Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+        l.add(ISoftOffloadService.class);
+        return l;
     }
 
     @Override
     public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-        Map<Class<? extends IFloodlightService>,
-        IFloodlightService> m =
-        new HashMap<Class<? extends IFloodlightService>,
-        IFloodlightService>();
-        m.put(Master.class, this);
+        Map<Class<? extends IFloodlightService>, IFloodlightService> m =
+                new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
+        // m.put(Master.class, this);
+        m.put(ISoftOffloadService.class, this);
         return m;
     }
 
@@ -841,7 +840,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         Collection<Class<? extends IFloodlightService>> l =
             new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
-        // l.add(IRestApiService.class);
+        l.add(IRestApiService.class);
         return l;
     }
 
@@ -849,7 +848,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void init(FloodlightModuleContext context)
             throws FloodlightModuleException {
         floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
-        // restApi = context.getServiceImpl(IRestApiService.class);
+        restApi = context.getServiceImpl(IRestApiService.class);
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
     }
@@ -914,6 +913,10 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // Statistics
         executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
+        
+        
+        // web
+        restApi.addRestletRoutable(new SoftOffloadWebRoutable());
     }
 
     private void parseNetworkConfig(String networkTopoFile) {
@@ -1026,8 +1029,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
             br.close();
 
-        } catch (FileNotFoundException e1) {
-            log.error("Network topology config is not found. Terminating.");
+        } catch (FileNotFoundException e) {
+            log.error("Network topology config is not found, terminating: " + e);
             System.exit(1);
         } catch (IOException e) {
             e.printStackTrace();
@@ -1164,10 +1167,10 @@ public class Master implements IFloodlightModule, IFloodlightService,
             br.close();
 
         } catch (FileNotFoundException e) {
-            log.error("AP config is not found. Terminating.");
+            log.error("AP config is not found, terminating: " + e);
             System.exit(1);
         } catch (IOException e) {
-            log.error("Failed to read AP config. Terminating.");
+            log.error("Failed to read AP config, terminating: " + e);
             e.printStackTrace();
             System.exit(1);
         }
@@ -1179,7 +1182,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     @Override
     public String getName() {
-        return "Master";
+        return "SoftOffload-Master";
     }
 
     @Override
@@ -1304,6 +1307,15 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void rowsDeleted(String tableName, Set<Object> rowKeys) {
         // TODO Auto-generated method stub
 
+    }
+
+    
+    
+    //********* REST API **********//
+    
+    @Override
+    public Collection<APAgent> getAgents() {
+        return apAgentMap.values();
     }
 
 

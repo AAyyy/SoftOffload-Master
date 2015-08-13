@@ -40,6 +40,9 @@ import org.openflow.protocol.action.OFAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
+import net.floodlightcontroller.mobilesdn.web.AgentJsonSerializer;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.util.MACAddress;
@@ -52,6 +55,7 @@ import net.floodlightcontroller.util.MACAddress;
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
+@JsonSerialize(using=AgentJsonSerializer.class)
 public class APAgent implements Comparable<Object> {
     protected static Logger log = LoggerFactory.getLogger(APAgent.class);
 

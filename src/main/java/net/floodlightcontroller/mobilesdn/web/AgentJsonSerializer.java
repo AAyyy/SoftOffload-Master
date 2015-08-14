@@ -6,6 +6,7 @@ package net.floodlightcontroller.mobilesdn.web;
 import java.io.IOException;
 
 import net.floodlightcontroller.mobilesdn.APAgent;
+import net.floodlightcontroller.mobilesdn.Client;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,13 +29,18 @@ public class AgentJsonSerializer extends JsonSerializer<APAgent> {
         
         jGen.writeStartObject();
         
-        jGen.writeArrayFieldStart("ssid");
-        jGen.writeString(agent.getSSID());
+        jGen.writeStringField("ssid", agent.getSSID());
+        jGen.writeStringField("bssid", agent.getBSSID());
+        
+        jGen.writeArrayFieldStart("client");
+        int count = 0;
+        for (Client clt : agent.getAllClients()) {
+        	jGen.writeString(clt.getMacAddress().toString());
+        	count++;
+        }
         jGen.writeEndArray();
-
-        jGen.writeArrayFieldStart("bssid");
-        jGen.writeString(agent.getBSSID());
-        jGen.writeEndArray();
+        
+        jGen.writeNumberField("clientnum", count);
         
         jGen.writeEndObject();
     }

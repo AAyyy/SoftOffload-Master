@@ -69,9 +69,6 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-// import net.floodlightcontroller.packet.Ethernet;
-// import net.floodlightcontroller.packet.IPv4;
-// import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.mobilesdn.ClickManageServer;
 import net.floodlightcontroller.mobilesdn.web.SoftOffloadWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
@@ -533,7 +530,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         }
                     }
                     
-                    System.out.println(rateMap.toString());
+                    // System.out.println(rateMap.toString());
                     
                     // send management data
                     if (cltWithMaxRate != null && !cltWithMaxRate.isBeningEvaluated()) {
@@ -730,7 +727,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                 }
             }
 
-            log.info("candidate: " + candidateBSSID + ", metric: " + metric);
+            log.info("final candidate: " + candidateBSSID + ", metric: " + metric);
             
             if (candidateBSSID != null) {
                 if (candidateBSSID.equals(clt.getAgent().getBSSID())) {

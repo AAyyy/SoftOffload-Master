@@ -654,10 +654,13 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             otherCltRate = 0;
                             for (Client c : agent.getAllClients()) {
                             	if (!c.equals(clt)) {
+                            		// System.out.println(c.getDownRate());
                             		otherCltRate += c.getDownRate() / 1000000;
                             	}
                             }
                             
+                            // System.out.println("*****otherCltRate: " + otherCltRate);
+
                             restRate = agentDownBW - otherCltRate;
                             if (restRate < 0) {
                             	restRate = 0;
@@ -942,6 +945,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         // Statistics
         executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
+        executor.execute(new OFRateStatistics(this.floodlightProvider, this, monitorInterval));
         restApi.addRestletRoutable(new SoftOffloadWebRoutable());
     }
 

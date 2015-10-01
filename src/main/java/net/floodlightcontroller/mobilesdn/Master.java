@@ -1357,5 +1357,16 @@ public class Master implements IFloodlightModule, IFloodlightService,
         return apAgentMap.values();
     }
 
+    @Override
+    public APAgent getAgent(String agentIp) {
+        return apAgentMap.get(agentIp);
+    }
+
+    @Override
+    public Client getClient(String clientMac) {
+        return allClientMap.get(clientMac.toLowerCase());
+    }
+    
+
 
 }

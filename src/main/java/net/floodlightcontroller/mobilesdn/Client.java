@@ -21,7 +21,6 @@ package net.floodlightcontroller.mobilesdn;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,7 +31,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.mobilesdn.web.ClientJsonSerializer;
 import net.floodlightcontroller.util.MACAddress;
 
 /**
@@ -42,6 +44,7 @@ import net.floodlightcontroller.util.MACAddress;
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
+@JsonSerialize(using=ClientJsonSerializer.class)
 public class Client implements Comparable<Object> {
     protected static Logger log = LoggerFactory.getLogger(Client.class);
 

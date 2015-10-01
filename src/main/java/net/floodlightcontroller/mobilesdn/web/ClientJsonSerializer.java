@@ -17,33 +17,27 @@ import com.fasterxml.jackson.databind.SerializerProvider;
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
  */
-public class AgentJsonSerializer extends JsonSerializer<APAgent> {
+public class ClientJsonSerializer extends JsonSerializer<Client> {
 
     /**
      * Handles serialization for APAgent
      */
     @Override
-    public void serialize(APAgent agent, JsonGenerator jGen,
+    public void serialize(Client clt, JsonGenerator jGen,
             SerializerProvider serializer) throws IOException,
             JsonProcessingException {
         
         jGen.writeStartObject();
         
-        jGen.writeStringField("ssid", agent.getSSID());
-        jGen.writeStringField("bssid", agent.getBSSID());
-        jGen.writeStringField("managedip", agent.getIpAddress().getHostAddress());
-        jGen.writeStringField("auth", agent.getAuth());
-        jGen.writeStringField("downrate", Double.toString(agent.getOFDownRate()));
+        jGen.writeStringField("mac", clt.getMacAddress().toString());
+        jGen.writeStringField("ip", clt.getIpAddress().getHostAddress());
+        jGen.writeStringField("downrate", Double.toString(clt.getDownRate()));
         
-        jGen.writeArrayFieldStart("client");
-        int count = 0;
-        for (Client clt : agent.getAllClients()) {
-        	jGen.writeString(clt.getMacAddress().toString());
-        	count++;
-        }
-        jGen.writeEndArray();
-        
-        jGen.writeNumberField("clientnum", count);
+        jGen.writeObjectFieldStart("agent");
+        jGen.writeStringField("ssid", clt.getAgent().getSSID());
+        jGen.writeStringField("bssid", clt.getAgent().getBSSID());
+        jGen.writeStringField("ip", clt.getAgent().getIpAddress().getHostAddress());
+        jGen.writeEndObject();
         
         jGen.writeEndObject();
     }
@@ -53,8 +47,8 @@ public class AgentJsonSerializer extends JsonSerializer<APAgent> {
      * Tells SimpleModule that we are the serializer for APAgent
      */
     @Override
-    public Class<APAgent> handledType() {
-        return APAgent.class;
+    public Class<Client> handledType() {
+        return Client.class;
     }
 
 }

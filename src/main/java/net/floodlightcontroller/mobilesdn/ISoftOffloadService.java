@@ -13,4 +13,8 @@ import net.floodlightcontroller.core.module.IFloodlightService;
  */
 public interface ISoftOffloadService extends IFloodlightService {
     public Collection<APAgent> getAgents();
+    
+    public APAgent getAgent(String agentIp);
+    
+    public Client getClient(String clientMac);
 }

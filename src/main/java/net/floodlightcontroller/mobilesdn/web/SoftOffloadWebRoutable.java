@@ -22,7 +22,9 @@ public class SoftOffloadWebRoutable implements RestletRoutable {
     public Restlet getRestlet(Context context) {
         Router router = new Router(context);
         // router.attach("/", DeviceResource.class);
-        router.attach("/agent/json", AgentResource.class);
+        router.attach("/agents/json", AgentResource.class);
+        router.attach("/agent/{agentId}/json", AgentEntityResource.class);
+        router.attach("/client/{clientId}/json", ClientEntityResource.class);
         return router;
     }
 

@@ -90,10 +90,11 @@ var AppRouter = Backbone.Router.extend({
 // load global models and reuse them
 var swl = new SwitchCollection();
 var hl  = new HostCollection();
+var agentl = new AgentCollection();
 
 var updating = true;
 
-tpl.loadTemplates(['home', 'status', 'topology', 'header', 'switch', 'switch-list', 'switch-list-item', 'host', 'host-list', 'host-list-item', 'port-list', 'port-list-item', 'flow-list', 'flow-list-item'],
+tpl.loadTemplates(['home', 'status', 'topology', 'header', 'switch', 'switch-list', 'switch-list-item', 'host', 'host-list', 'host-list-item', 'port-list', 'port-list-item', 'flow-list', 'flow-list-item', 'agent-list', 'agent-list-item'],
     function () {
         app = new AppRouter();
         Backbone.history.start({pushState: true});
@@ -119,11 +120,15 @@ tpl.loadTemplates(['home', 'status', 'topology', 'header', 'switch', 'switch-lis
             // wait for the page to be rendered before loading any data
             swl.fetch();
             hl.fetch();
+            agentl.fetch();
             
             setInterval(function () {
                 if(updating) {
                     swl.fetch();
                     hl.fetch();
+                    agentl.fetch();
+                    // console.log("agentl: " + JSON.stringify(agentl));
+                    // console.log("agentl length: " + agentl.length);
                 }
             }, 3000);
         });

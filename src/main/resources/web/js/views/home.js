@@ -30,6 +30,7 @@ window.HomeView = Backbone.View.extend({
         var stats = new Status();
         $(this.el).find('#controller-status').html(new StatusView({model:stats}).render().el);
         $(this.el).find('#switch-list').html(new SwitchListView({model:swl}).render().el);
+        $(this.el).find('#agent-list').html(new AgentListView({model:agentl}).render().el);
         $(this.el).find('#host-list').html(new HostListView({model:hl}).render().el);
         return this;
     },

@@ -33,6 +33,7 @@ public class AgentJsonSerializer extends JsonSerializer<APAgent> {
         jGen.writeStringField("bssid", agent.getBSSID());
         jGen.writeStringField("managedip", agent.getIpAddress().getHostAddress());
         jGen.writeStringField("auth", agent.getAuth());
+        jGen.writeStringField("downbandwidth", Double.toString(agent.getDownlinkBW()));
         jGen.writeStringField("downrate", Double.toString(agent.getOFDownRate()));
         
         jGen.writeArrayFieldStart("client");

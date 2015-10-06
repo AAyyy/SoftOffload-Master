@@ -26,6 +26,8 @@ var AppRouter = Backbone.Router.extend({
         "switch/:id/port/:p":"portDetails", // not clear if needed
         "hosts":"hostList",
         "host/:id":"hostDetails",
+        "agents":"agentList",
+        "agent/:id":"agentDetails"
         // "vlans":"vlanList" // maybe one day
         // "vlan/:id":"vlanDetails"
     },
@@ -85,6 +87,20 @@ var AppRouter = Backbone.Router.extend({
         $('li > a[href*="/hosts"]').parent().addClass('active');
     },
 
+    agentList:function () {
+        $('#content').html(new AgentListView({model:agentl}).render().el);
+        $('ul.nav > li').removeClass('active');
+        $('li > a[href*="/agents"]').parent().addClass('active');
+    },
+
+    agentDetails:function (id) {
+        //console.log("switching [sic] to single switch view");
+        var agent = agentl.get(id);
+        $('#content').html(new AgentView({model:agent}).render().el);
+        $('ul.nav > li').removeClass('active');
+        $('li > a[href*="/agents"]').parent().addClass('active');
+    },
+
 });
 
 // load global models and reuse them
@@ -94,7 +110,13 @@ var agentl = new AgentCollection();
 
 var updating = true;
 
-tpl.loadTemplates(['home', 'status', 'topology', 'header', 'switch', 'switch-list', 'switch-list-item', 'host', 'host-list', 'host-list-item', 'port-list', 'port-list-item', 'flow-list', 'flow-list-item', 'agent-list', 'agent-list-item'],
+tpl.loadTemplates(['home', 'status', 'topology', 'header', 
+                    'switch', 'switch-list', 'switch-list-item', 
+                    'host', 'host-list', 'host-list-item', 
+                    'port-list', 'port-list-item', 
+                    'flow-list', 'flow-list-item', 
+                    'agent', 'agent-list', 'agent-list-item', 
+                    'client-list', 'client-list-item'],
     function () {
         app = new AppRouter();
         Backbone.history.start({pushState: true});

@@ -11,6 +11,25 @@
    limitations under the License.
 */
 
+window.AgentView = Backbone.View.extend({
+
+    initialize:function () {
+        this.template = _.template(tpl.get('agent'));
+        this.model.bind("change", this.render, this);
+        //this.model.bind("destroy", this.close, this);
+        
+        // some parts of the model are large and are only needed in detail view
+        this.model.loadClients();
+    },
+
+    render:function (eventName) {
+        $(this.el).html(this.template(this.model.toJSON()));
+        $(this.el).find('#client-list').html(new ClientListView({model:this.model.cltCollection}).render().el);
+        return this;
+    }
+
+});
+
 window.AgentListView = Backbone.View.extend({
 
     initialize:function () {

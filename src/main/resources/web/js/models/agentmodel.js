@@ -40,15 +40,42 @@ window.Agent = Backbone.Model.extend({
                 // console.log("fetched agent " + self.attributes.ip);
                 // console.log(data);
                 self.set(data);
+                self.set('downrate', (self.get('downrate') / 1000000).toFixed(2));
             }
         });
 
         // console.log(JSON.stringify(self));
         self.trigger('add');
+        this.cltCollection = new ClientCollection();
     },
 
     fetch:function () {
         this.initialize()
+    },
+
+    loadClients:function () {
+        var self = this;
+
+        self.cltCollection.reset();
+        $.when(
+            _.each(self.get('client'), function (cltMac) {
+                $.ajax({
+                    url:hackBase + "/wm/softoffload/client/" + cltMac + "/json",
+                    dataType:"json",
+                    success:function (data) {
+                        // console.log("client data: " + JSON.stringify(data));
+                        self.cltCollection.add({mac: data['mac'],
+                                                ip: data['ip'],
+                                                downrate: (data['downrate'] / 1000000).toFixed(3)});
+                        // console.log(self.cltCollection.toJSON());
+                    }
+                });
+            })
+        ).done(
+            self.cltCollection.trigger('add')
+        );
+
+        
     },
 
 });

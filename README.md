@@ -68,6 +68,29 @@ $: ant
 $: java -jar floodlight.jar
 ```
 
+### REST API
+
+To facilitate application development and future demonstration, we also provide a few REST APIs for SoftOffload. The interfaces follow the Floodlight style ([Floodlight native REST API](https://floodlight.atlassian.net/wiki/display/floodlightcontroller/Floodlight+REST+API)).
+
+We also add demonstration components in the Floodlight UI with our REST API. You can go to your browser and type in a URL as follows to check wireless information:
+
+http://localhost:8080/ui/index.html (replace localhost with the proper IP address of your Floodlight controller).
+
+The REST call is like this:
+
+```
+curl http://localhost:8080/wm/softofflod/agents/json
+```
+
+Current available interfaces via REST:
+
+| URI                               | Method | Description                    |
+| --------------------------------- | ------ | ------------------------------ |
+| /wm/softoffload/agents/json       | GET    | Retrieve all registered agents |
+| /wm/softoffload/agent/(id)/json   | GET    | Retrieve agent info for (id)   |
+| /wm/softoffload/client/(id)/json  | GET    | Retrieve client info for (id)  |
+
+
 ## Licence
 
 Under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0)

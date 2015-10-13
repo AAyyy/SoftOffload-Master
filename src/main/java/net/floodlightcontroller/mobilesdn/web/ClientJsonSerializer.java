@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 public class ClientJsonSerializer extends JsonSerializer<Client> {
 
     /**
-     * Handles serialization for APAgent
+     * Handles serialization for Client
      */
     @Override
     public void serialize(Client clt, JsonGenerator jGen,
@@ -44,7 +44,7 @@ public class ClientJsonSerializer extends JsonSerializer<Client> {
     
     
     /**
-     * Tells SimpleModule that we are the serializer for APAgent
+     * Tells that we are the serializer for Client
      */
     @Override
     public Class<Client> handledType() {

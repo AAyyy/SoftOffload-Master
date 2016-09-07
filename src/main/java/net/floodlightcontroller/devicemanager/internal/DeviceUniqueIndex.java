@@ -64,7 +64,7 @@ public class DeviceUniqueIndex extends DeviceIndex {
     public boolean updateIndex(Device device, Long deviceKey) {
         for (Entity e : device.entities) {
             IndexedEntity ie = new IndexedEntity(keyFields, e);
-            if (!ie.hasNonNullKeys()) continue;
+            if (!ie.hasNonZeroOrNonNullKeys()) continue;
 
             Long ret = index.putIfAbsent(ie, deviceKey);
             if (ret != null && !ret.equals(deviceKey)) {
@@ -78,10 +78,11 @@ public class DeviceUniqueIndex extends DeviceIndex {
     }
 
     @Override
-    public void updateIndex(Entity entity, Long deviceKey) {
+    public boolean updateIndex(Entity entity, Long deviceKey) {
         IndexedEntity ie = new IndexedEntity(keyFields, entity);
-        if (!ie.hasNonNullKeys()) return;
+        if (!ie.hasNonZeroOrNonNullKeys()) return false;
         index.put(ie, deviceKey);
+        return true;
     }
 
     @Override
@@ -112,5 +113,4 @@ public class DeviceUniqueIndex extends DeviceIndex {
             return null;
         return deviceKey;
     }
-
 }

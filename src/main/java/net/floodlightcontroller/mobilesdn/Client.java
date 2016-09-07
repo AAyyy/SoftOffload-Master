@@ -28,6 +28,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +37,6 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.mobilesdn.web.ClientJsonSerializer;
-import net.floodlightcontroller.util.MACAddress;
 
 /**
  * Class for Wireless client:
@@ -48,8 +49,8 @@ import net.floodlightcontroller.util.MACAddress;
 public class Client implements Comparable<Object> {
     protected static Logger log = LoggerFactory.getLogger(Client.class);
 
-    private final MACAddress hwAddress;
-    private InetAddress ipAddress;
+    private final MacAddress hwAddress;
+    private IPv4Address ipAddress;
     private String app = "trivial";
     private double upRate;
     private double downRate;
@@ -83,7 +84,7 @@ public class Client implements Comparable<Object> {
             @Override
             public void run() {
                 // set up message data
-                byte[] mac = hwAddress.toBytes();
+                byte[] mac = hwAddress.getBytes();
                 byte[] b1 = "c".getBytes();
                 byte[] b2 = "switch|sdntest1|open|\n".getBytes();
 
@@ -105,7 +106,7 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(MACAddress hwAddress, InetAddress ipAddress, APAgent agt) {
+    public Client(MacAddress hwAddress, IPv4Address ipAddress, APAgent agt) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
         this.agent = agt;
@@ -120,9 +121,9 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(String hwAddress, String ipAddress, APAgent agt) throws UnknownHostException {
-        this.hwAddress = MACAddress.valueOf(hwAddress);
-        this.ipAddress = InetAddress.getByName(ipAddress);
+    public Client(String hwAddress, IPv4Address ipAddress, APAgent agt) throws UnknownHostException {
+        this.hwAddress = MacAddress.of(hwAddress);
+        this.ipAddress = ipAddress;
         this.agent = agt;
 
         // initializeClientTimer();
@@ -135,7 +136,7 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(MACAddress hwAddress, InetAddress ipAddress, IOFSwitch sw, APAgent agt) {
+    public Client(MacAddress hwAddress, IPv4Address ipAddress, IOFSwitch sw, APAgent agt) {
         this.hwAddress = hwAddress;
         this.ipAddress = ipAddress;
         this.ofSwitch = sw;
@@ -151,9 +152,9 @@ public class Client implements Comparable<Object> {
      * @param hwAddress Client's hw address
      * @param ipv4Address Client's IPv4 address
      */
-    public Client(String hwAddress, String ipAddress, IOFSwitch sw, APAgent agt) throws UnknownHostException {
-        this.hwAddress = MACAddress.valueOf(hwAddress);
-        this.ipAddress = InetAddress.getByName(ipAddress);
+    public Client(String hwAddress, IPv4Address ipAddress, IOFSwitch sw, APAgent agt) throws UnknownHostException {
+        this.hwAddress = MacAddress.of(hwAddress);
+        this.ipAddress = ipAddress;
         this.ofSwitch = sw;
         this.agent = agt;
 
@@ -180,7 +181,7 @@ public class Client implements Comparable<Object> {
      * Get the client's MAC address.
      * @return
      */
-    public MACAddress getMacAddress() {
+    public MacAddress getMacAddress() {
         return this.hwAddress;
     }
 
@@ -188,7 +189,7 @@ public class Client implements Comparable<Object> {
      * Get the client's IP address.
      * @return
      */
-    public InetAddress getIpAddress() {
+    public IPv4Address getIpAddress() {
         return ipAddress;
     }
 
@@ -196,17 +197,8 @@ public class Client implements Comparable<Object> {
      * Set the client's IP address
      * @param addr
      */
-    public void setIpAddress(InetAddress addr) {
+    public void setIpAddress(IPv4Address addr) {
         this.ipAddress = addr;
-    }
-
-    /**
-     * Set the client's IP address
-     * @param String addr
-     * @throws UnknownHostException
-     */
-    public void setIpAddress(String addr) throws UnknownHostException {
-        this.ipAddress = InetAddress.getByName(addr);
     }
 
     /**
@@ -470,9 +462,9 @@ public class Client implements Comparable<Object> {
         StringBuilder builder = new StringBuilder();
 
         builder.append("Client " + hwAddress.toString() + ", ipAddr="
-                + ipAddress.getHostAddress() + ", uprate="
+                + ipAddress.toString() + ", uprate="
                 + Double.toString(upRate) + ", downrate=" + Double.toString(downRate)
-                + ", dpid=" + Long.toString(ofSwitch.getId()));
+                + ", dpid=" + (ofSwitch.getId()).toString());
 
         return builder.toString();
     }
@@ -495,10 +487,10 @@ public class Client implements Comparable<Object> {
     public int compareTo(Object o) {
         assert (o instanceof Client);
 
-        if (this.hwAddress.toLong() == ((Client)o).getMacAddress().toLong())
+        if (this.hwAddress.getLong() == ((Client)o).getMacAddress().getLong())
             return 0;
 
-        if (this.hwAddress.toLong() > ((Client)o).getMacAddress().toLong())
+        if (this.hwAddress.getLong() > ((Client)o).getMacAddress().getLong())
             return 1;
 
         return -1;

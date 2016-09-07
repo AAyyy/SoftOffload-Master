@@ -30,13 +30,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.openflow.protocol.OFFlowMod;
-import org.openflow.protocol.OFMatch;
-import org.openflow.protocol.OFPacketOut;
-import org.openflow.protocol.OFPort;
-import org.openflow.protocol.Wildcards;
-import org.openflow.protocol.Wildcards.Flag;
-import org.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFBufferId;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.U64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,8 +47,6 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import net.floodlightcontroller.mobilesdn.web.AgentJsonSerializer;
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.packet.IPv4;
-import net.floodlightcontroller.util.MACAddress;
 
 /**
  * APAgent class is designed for recording and manage AP(local agent) info:
@@ -68,7 +69,7 @@ public class APAgent implements Comparable<Object> {
 
     private double upRate;      // up rate of agent eth port
     private double downRate;	// down rate of agent eht port
-    private Map<String, Client> clientMap = new ConcurrentHashMap<String, Client>();
+    private Map<MacAddress, Client> clientMap = new ConcurrentHashMap<MacAddress, Client>();
     private IOFSwitch ofSwitch = null;          // not initialized
     private DatagramSocket agentSocket = null;
     // private boolean offloadingFlag = false;   // OFMonitor may change this to true
@@ -107,9 +108,10 @@ public class APAgent implements Comparable<Object> {
             e.printStackTrace();
             System.exit(1);
         } catch (UnknownHostException e1) {
-            e1.printStackTrace();
-            System.exit(1);
-        }
+			
+			e1.printStackTrace();
+			 System.exit(1);
+		}
     }
 
     public APAgent(InetAddress ipAddr, IOFSwitch sw, String s, String b, String auth, short port, double bw) {
@@ -145,9 +147,9 @@ public class APAgent implements Comparable<Object> {
             e.printStackTrace();
             System.exit(1);
         } catch (UnknownHostException e1) {
-            e1.printStackTrace();
+        	e1.printStackTrace();
             System.exit(1);
-        }
+		}
     }
 
     /**
@@ -317,9 +319,8 @@ public class APAgent implements Comparable<Object> {
      * @param initailized client instance
      */
     public void addClient(Client client) {
-        String clientMac = client.getMacAddress().toString().toLowerCase();
-
-        clientMap.put(clientMac, client);
+       
+        clientMap.put(client.getMacAddress(), client);
     }
 
     /**
@@ -327,10 +328,10 @@ public class APAgent implements Comparable<Object> {
      *
      * @param macAddress MAC address string
      */
-    public Client getClient(String macAddress) {
+    public Client getClient(String clientMacStr) {
         // assert clientMap.containsKey(macAddress);
 
-        return clientMap.get(macAddress.toLowerCase());
+        return clientMap.get(MacAddress.of(clientMacStr));
     }
 
     /**
@@ -338,9 +339,7 @@ public class APAgent implements Comparable<Object> {
      *
      * @param macAddress MAC address
      */
-    public Client getClient(MACAddress macAddress) {
-        String clientMac = macAddress.toString().toLowerCase();
-        // assert clientMap.containsKey(clientMac);
+    public Client getClient(MacAddress clientMac) {
 
         return clientMap.get(clientMac);
     }
@@ -360,7 +359,7 @@ public class APAgent implements Comparable<Object> {
      * @param client - initailized client instance
      */
     public void removeClient(Client client) {
-        String clientMac = client.getMacAddress().toString().toLowerCase();
+        MacAddress clientMac = client.getMacAddress();
 
         if (clientMap.containsKey(clientMac)) {
             // clientMap.get(clientMac).cancelTask();
@@ -374,7 +373,7 @@ public class APAgent implements Comparable<Object> {
      * @param mac address string
      */
     public void removeClient(String clientMac) {
-        String mac = clientMac.toLowerCase();
+        MacAddress mac = MacAddress.of(clientMac);
 
         if (clientMap.containsKey(mac)) {
             // clientMap.get(mac).cancelTask();
@@ -454,7 +453,7 @@ public class APAgent implements Comparable<Object> {
                 + ", clientNum=" + Integer.toString(getClientNum()));
 
         if (this.ofSwitch != null) {
-            builder.append(", dpid=" + Long.toString(ofSwitch.getId()));
+            builder.append(", dpid=" + (ofSwitch.getId()).toString());
         }
 
         return builder.toString();
@@ -469,31 +468,26 @@ public class APAgent implements Comparable<Object> {
      * @param clientIpAddr, client IPv4 address
      * @return client, client instance corresponding to this info
      */
-    Client receiveClientInfo(final String clientEthAddr, final String clientIpAddr) {
+    Client receiveClientInfo(final MacAddress clientEthAddr, final IPv4Address clientIpAddr) {
 
-        String mac = clientEthAddr.toLowerCase();
 
-        try {
-            if (clientMap.containsKey(mac)) { // update client info
-                Client client = clientMap.get(mac);
-                if (client.getIpAddress().getHostAddress() != clientIpAddr) {
-                    client.setIpAddress(clientIpAddr);
-                }
-            } else { // new client
-                Client client = new Client(clientEthAddr, clientIpAddr, this);
-                if (ofSwitch != null) {
-                    client.setSwitch(ofSwitch);
-                }
-                clientMap.put(mac, client);
+        if (clientMap.containsKey(clientEthAddr)) { // update client info
+		    Client client = clientMap.get(clientEthAddr);
+		    if (!client.getIpAddress().equals(clientIpAddr)) {
+		        client.setIpAddress(clientIpAddr);
+		    }
+		} else { // new client
+		    Client client = new Client(clientEthAddr, clientIpAddr, this);
+		    if (ofSwitch != null) {
+		        client.setSwitch(ofSwitch);
+		    }
+		    clientMap.put(clientEthAddr, client);
 
-                log.info("New client connected {} -- {}, initializing it...", 
-                        clientEthAddr, clientIpAddr);
-                
-                return client;
-            }
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
+		    log.info("New client connected {} -- {}, initializing it...", 
+		            clientEthAddr, clientIpAddr);
+		    
+		    return client;
+		}
 
         return null;
     }
@@ -504,13 +498,11 @@ public class APAgent implements Comparable<Object> {
      * @param clientEthAddr, client mac address
      * @param rate, client's byte rate of ip flows
      */
-    Client receiveClientRate(final String clientEthAddr, final double uprate,
+    Client receiveClientRate(final MacAddress clientEthAddr, final double uprate,
                             final double downrate) {
 
-        String mac = clientEthAddr.toLowerCase();
-
-        if (clientMap.containsKey(mac)) {
-            Client clt = clientMap.get(mac);
+        if (clientMap.containsKey(clientEthAddr)) {
+            Client clt = clientMap.get(clientEthAddr);
             clt.updateUpRate(uprate);
             clt.updateDownRate(downrate);
             // System.out.println(clt.toString());
@@ -522,15 +514,15 @@ public class APAgent implements Comparable<Object> {
                 log.info("FlowRate = {}bytes/s: suspicious flow, " +
                         "drop matched pkts", Double.toString(uprate));
 
-                dropFlow(sw, clt, mac);
+                dropFlow(sw, clt, clientEthAddr);
             }
             
             return clt;
         } else {
             log.warn("Received uninilized Client rate info, checking with agent...");
             
-            MACAddress macAddr = MACAddress.valueOf(mac);
-            byte[] m = macAddr.toBytes();
+            
+            byte[] m = clientEthAddr.getBytes();
             byte[] signal = "ack".getBytes();
             byte[] message = new byte[m.length + signal.length];
 
@@ -554,40 +546,31 @@ public class APAgent implements Comparable<Object> {
     	send(message);
     }
     
-    public void dropFlow(IOFSwitch sw, Client clt, String mac) {
-        OFMatch match = new OFMatch();
-        match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_SRC)
-                                         .matchOn(Flag.DL_TYPE)
-                                         .matchOn(Flag.NW_SRC)
-                                         .withNwSrcMask(32));
-        match.setDataLayerSource(mac)
-             .setDataLayerType((short)0x0800)
-             .setNetworkSource(IPv4.toIPv4Address(clt.getIpAddress().getAddress()));
-
-        OFFlowMod flowMod = new OFFlowMod();
-        // set no action to drop
+    public void dropFlow(IOFSwitch sw, Client clt, MacAddress mac) {
+    	
+    	Match.Builder matchBuilder = sw.getOFFactory().buildMatch();
+    	
+    	matchBuilder.setExact(MatchField.ETH_SRC, mac)
+    	            .setExact(MatchField.ETH_TYPE, EthType.IPv4)
+    	            .setExact(MatchField.IPV4_SRC, clt.getIpAddress());
+    	            
+    	OFFlowMod.Builder fmb = sw.getOFFactory().buildFlowModify();
+    	// set no action to drop
         List<OFAction> actions = new ArrayList<OFAction>();
-
-        // set flow_mod
-        flowMod.setCookie(67);   // some value chosen randomly
-        flowMod.setPriority((short)200);
-        flowMod.setOutPort(OFPort.OFPP_NONE);
-        flowMod.setMatch(match);
-        // this buffer_id is needed for avoiding a BAD_REQUEST error
-        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-        flowMod.setHardTimeout((short) 0);
-        flowMod.setIdleTimeout((short) 20);
-        flowMod.setActions(actions);
-        flowMod.setCommand(OFFlowMod.OFPFC_MODIFY);
-
+    
+    	fmb.setCookie(U64.of(67));
+    	fmb.setPriority(200);
+        fmb.setOutPort(OFPort.ALL);
+        fmb.setMatch(matchBuilder.build());
+        fmb.setBufferId(OFBufferId.NO_BUFFER);
+        fmb.setHardTimeout(0);
+        fmb.setIdleTimeout(20);
+        fmb.setActions(actions);
+   
         // send flow_mod
 
         try {
-            sw.write(flowMod, null);
-            sw.flush();
-        } catch (IOException e) {
-            log.error("tried to write flow_mod to {} but failed: {}",
-                        sw.getId(), e.getMessage());
+            sw.write(fmb.build(), null);
         } catch (Exception e) {
             log.error("Failure to modify flow entries", e);
         }

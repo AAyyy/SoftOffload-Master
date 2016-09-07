@@ -1,21 +1,20 @@
 package net.floodlightcontroller.mobilesdn;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.openflow.protocol.OFMatch;
-import org.openflow.protocol.OFPort;
-import org.openflow.protocol.OFStatisticsRequest;
-import org.openflow.protocol.Wildcards;
-import org.openflow.protocol.statistics.OFFlowStatisticsReply;
-import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
-import org.openflow.protocol.statistics.OFStatistics;
-import org.openflow.protocol.statistics.OFStatisticsType;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsRequest;
+import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.TableId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,92 +52,86 @@ public class OFRateStatistics implements Runnable {
 	}
 	
 	private void RateStatistics() {
-		List<OFStatistics> values = null;
-        Future<List<OFStatistics>> future;
-        OFFlowStatisticsReply reply;
-
-        for (APAgent agent: master.getAllAPAgents()) { // Terrible O(n³)
+		
+		Future<List<OFStatsReply>> future;
+    	List<OFStatsReply> values;
+    	
+    	for (APAgent agent: master.getAllAPAgents()) { // Terrible O(n³)
+    		
             IOFSwitch sw = agent.getSwitch();
-
-            OFStatisticsRequest req = new OFStatisticsRequest();
-            req.setStatisticType(OFStatisticsType.FLOW);
-            int requestLength = req.getLengthU();
-            OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-            OFMatch mPattern = new OFMatch();
-            mPattern.setWildcards(Wildcards.FULL);
-            specificReq.setMatch(mPattern);
-            specificReq.setTableId((byte)0xff);
             
-            // using OFPort.OFPP_NONE(0xffff) as the outport
-            specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
-            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-            requestLength += specificReq.getLength();
-            req.setLengthU(requestLength);
-
+            Match.Builder matchBuilder = sw.getOFFactory().buildMatch();
+            
+            OFStatsRequest req = sw.getOFFactory().buildFlowStatsRequest()
+                    .setMatch(matchBuilder.build())
+                    .setTableId(TableId.ALL)
+                    .setOutPort(OFPort.NO_MASK)
+                    .build();
             try {
-                // make the query
-                future = sw.queryStatistics(req);
-                values = future.get(3, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("[ClientRate] Failure retrieving flow statistics from switch " + sw, e);
-            }
-
-            if (values != null) {
-            	double agentUpRateSum = 0;
-                double agentDownRateSum = 0;
-            	// calculate rate for each client
-            	for (Client clt: agent.getAllClients()) {
-            		byte[] cltMac = clt.getMacAddress().toBytes();
-            		long cltUpByteSum = 0;
-                    long cltDownByteSum = 0;
-            		for (OFStatistics stat: values) {
-                		reply = (OFFlowStatisticsReply) stat;
-                        long byteCount = reply.getByteCount();
-                        if (!reply.getActions().isEmpty() && byteCount > 0) {
-                            OFMatch match = reply.getMatch();
-                            if (Arrays.equals(cltMac, match.getDataLayerDestination())) {
-                            	cltDownByteSum += byteCount;
-                                continue;
-                            } else if (Arrays.equals(cltMac, match.getDataLayerSource())) {
-                            	cltUpByteSum += byteCount;
-                            	continue;
-                            }
+    	    	
+    	    	future =  sw.writeStatsRequest(req); 
+    			values = future.get(3, TimeUnit.SECONDS);
+    			
+    			if (values != null) {
+    				double agentUpRateSum = 0;
+                    double agentDownRateSum = 0;
+                	// calculate rate for each client
+                	for (Client clt: agent.getAllClients()) {
+                		MacAddress cltMac = clt.getMacAddress();
+                		long cltUpByteSum = 0;
+                        long cltDownByteSum = 0;
+                        
+                        for (OFStatsReply r : values) {
+    		                OFFlowStatsReply psr = (OFFlowStatsReply) r;
+    		                
+    		                for (OFFlowStatsEntry pse : psr.getEntries()) {
+    		                	long byteCount = pse.getByteCount().getValue();
+    		                	if (!pse.getActions().isEmpty() && byteCount > 0) {
+    	                            Match match = pse.getMatch();
+    	                            if (cltMac.equals(match.get(MatchField.ETH_DST))) {
+    	                            	cltDownByteSum += byteCount;
+    	                                continue;
+    	                            } else if (cltMac.equals(match.get(MatchField.ETH_SRC))) {
+    	                            	cltUpByteSum += byteCount;
+    	                            	continue;
+    	                            }
+    	                        }    		                	
+    		                }
                         }
-            		}
-            		
-            		long upByteDiff = cltUpByteSum - clt.getOFUpBytes();
-            		long downByteDiff = cltDownByteSum - clt.getOFDownBytes();
-            		if (cltUpByteSum < clt.getOFUpBytes()) { // in case of overflow
-            			upByteDiff = Long.MAX_VALUE - clt.getOFUpBytes() 
-            					+ cltUpByteSum - Long.MIN_VALUE;
-            			cltUpByteSum = cltUpByteSum - Long.MIN_VALUE;
-            		}
-            		if (cltDownByteSum < clt.getOFDownBytes()) {
-            			downByteDiff = Long.MAX_VALUE - clt.getOFDownBytes()
-            					+ cltDownByteSum - Long.MIN_VALUE;
-            			cltDownByteSum = cltDownByteSum - Long.MIN_VALUE;
-            		}
-            		
-            		double upRate = Math.abs(upByteDiff) * 8 / interval;
-            		double downRate = Math.abs(downByteDiff) * 8 / interval;
-            		
-            		clt.updateUpRate(upRate);
-            		clt.updateDownRate(downRate);
-            		clt.updateOFUpBytes(cltUpByteSum);
-            		clt.updateOFDownBytes(cltDownByteSum);
-            		agentUpRateSum += upRate;
-            		agentDownRateSum += downRate;
-            		
-            		log.debug("clt rate debug: " + clt.getIpAddress().getHostAddress() 
-            					+ " -- " + upRate + " - " + downRate);
-            	}
-            	agent.updateUpRate(agentUpRateSum);
-            	agent.updateDownRate(agentDownRateSum);
-            	// log.info("agent rate debug: " + agent.getSSID()
-        		// 		+ " -- " + agentUpRateSum + " - " + agentDownRateSum);
+                        long upByteDiff = cltUpByteSum - clt.getOFUpBytes();
+                		long downByteDiff = cltDownByteSum - clt.getOFDownBytes();
+                		if (cltUpByteSum < clt.getOFUpBytes()) { // in case of overflow
+                			upByteDiff = Long.MAX_VALUE - clt.getOFUpBytes() 
+                					+ cltUpByteSum - Long.MIN_VALUE;
+                			cltUpByteSum = cltUpByteSum - Long.MIN_VALUE;
+                		}
+                		if (cltDownByteSum < clt.getOFDownBytes()) {
+                			downByteDiff = Long.MAX_VALUE - clt.getOFDownBytes()
+                					+ cltDownByteSum - Long.MIN_VALUE;
+                			cltDownByteSum = cltDownByteSum - Long.MIN_VALUE;
+                		}
+                		
+                		double upRate = Math.abs(upByteDiff) * 8 / interval;
+                		double downRate = Math.abs(downByteDiff) * 8 / interval;
+                		
+                		clt.updateUpRate(upRate);
+                		clt.updateDownRate(downRate);
+                		clt.updateOFUpBytes(cltUpByteSum);
+                		clt.updateOFDownBytes(cltDownByteSum);
+                		agentUpRateSum += upRate;
+                		agentDownRateSum += downRate;
+                		
+                		log.debug("clt rate debug: " + clt.getIpAddress().toString()
+                					+ " -- " + upRate + " - " + downRate);
+                        
+                		
+                	}
+                	agent.updateUpRate(agentUpRateSum);
+                	agent.updateDownRate(agentDownRateSum);   				
+    			}
+    		} catch (Exception e) {
+                    log.error("[ClientRate] Failure retrieving flow statistics from switch " + sw, e);
             }
-        }
-	}
-	
-
+    	}   	   	   			    
+	}	
 }

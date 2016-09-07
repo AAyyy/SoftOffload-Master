@@ -1,7 +1,7 @@
 /**
-*    Copyright 2011, Big Switch Networks, Inc. 
+*    Copyright 2011, Big Switch Networks, Inc.
 *    Originally created by David Erickson, Stanford University
-* 
+*
 *    Licensed under the Apache License, Version 2.0 (the "License"); you may
 *    not use this file except in compliance with the License. You may obtain
 *    a copy of the License at
@@ -17,40 +17,24 @@
 
 package net.floodlightcontroller.core.internal;
 
-import java.util.List;
+import org.projectfloodlight.openflow.protocol.OFMessage;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.handler.codec.oneone.OneToOneEncoder;
-import org.openflow.protocol.OFMessage;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.MessageToByteEncoder;
+
 
 /**
- * Encode an openflow message for output into a ChannelBuffer, for use in a
+ * Encode an iterable of openflow messages for output into a ByteBuf, for use in a
  * netty pipeline
- * @author readams
+ *
+ * @author Andreas Wundsam <andreas.wundsam@bigswitch.com>
  */
-public class OFMessageEncoder extends OneToOneEncoder {
-
+public class OFMessageEncoder extends MessageToByteEncoder<Iterable<OFMessage>> {
     @Override
-    protected Object encode(ChannelHandlerContext ctx, Channel channel,
-                            Object msg) throws Exception {
-        if (!(  msg instanceof List))
-            return msg;
-
-        @SuppressWarnings("unchecked")
-        List<OFMessage> msglist = (List<OFMessage>)msg;
-        int size = 0;
-        for (OFMessage ofm :  msglist) {
-                size += ofm.getLengthU();
+    protected void encode(ChannelHandlerContext ctx, Iterable<OFMessage> msgList, ByteBuf out) throws Exception {
+        for (OFMessage ofm :  msgList) {
+            ofm.writeTo(out);
         }
-
-        ChannelBuffer buf = ChannelBuffers.buffer(size);;
-        for (OFMessage ofm :  msglist) {
-            ofm.writeTo(buf);
-        }
-        return buf;
     }
-
 }

@@ -1,60 +1,104 @@
 /**
-*    Copyright 2011, Big Switch Networks, Inc. 
-*    Originally created by David Erickson, Stanford University
-* 
-*    Licensed under the Apache License, Version 2.0 (the "License"); you may
-*    not use this file except in compliance with the License. You may obtain
-*    a copy of the License at
-*
-*         http://www.apache.org/licenses/LICENSE-2.0
-*
-*    Unless required by applicable law or agreed to in writing, software
-*    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-*    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-*    License for the specific language governing permissions and limitations
-*    under the License.
-**/
+ *    Copyright 2011, Big Switch Networks, Inc.
+ *    Originally created by David Erickson, Stanford University
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *    not use this file except in compliance with the License. You may obtain
+ *    a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ *    License for the specific language governing permissions and limitations
+ *    under the License.
+ **/
 
 package net.floodlightcontroller.core.internal;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.handler.codec.frame.FrameDecoder;
-import org.openflow.protocol.OFMessage;
-import org.openflow.protocol.factory.BasicFactory;
-import org.openflow.protocol.factory.OFMessageFactory;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.ByteToMessageDecoder;
+
+import org.projectfloodlight.openflow.protocol.OFFactories;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFMessageReader;
+import org.projectfloodlight.openflow.protocol.OFVersion;
 
 /**
- * Decode an openflow message from a Channel, for use in a netty
- * pipeline
- * @author readams
+ * Decode an openflow message from a channel, for use in a netty pipeline.
+ *
+ * @author Andreas Wundsam <andreas.wundsam@bigswitch.com>
  */
-public class OFMessageDecoder extends FrameDecoder {
+public class OFMessageDecoder extends ByteToMessageDecoder {
 
-    OFMessageFactory factory = BasicFactory.getInstance();
-    
-    @Override
-    protected Object decode(ChannelHandlerContext ctx, Channel channel,
-                            ChannelBuffer buffer) throws Exception {
-        if (!channel.isConnected()) {
-            // In testing, I see decode being called AFTER decode last.
-            // This check avoids that from reading curroupted frames
-            return null;
-        }
+	private OFMessageReader<OFMessage> reader;
 
-        List<OFMessage> message = factory.parseMessage(buffer);
-        return message;
-    }
+	public OFMessageDecoder() {
+		setReader();
+	}
 
-    @Override
-    protected Object decodeLast(ChannelHandlerContext ctx, Channel channel,
-                            ChannelBuffer buffer) throws Exception {
-        // This is not strictly needed atthis time. It is used to detect
-        // connection reset detection from netty (for debug)
-        return null;
-    }
+	public OFMessageDecoder(OFVersion version) {
+		setVersion(version);
+		setReader();
+	}
 
+	private void setReader() {
+		reader = OFFactories.getGenericReader();
+	}
+
+	public void setVersion(OFVersion version) {
+		OFFactory factory = OFFactories.getFactory(version);
+		this.reader = factory.getReader();
+	}
+
+	@Override
+	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+		if (!ctx.channel().isActive()) {
+			// In testing, I see decode being called AFTER decode last.
+			// This check avoids that from reading corrupted frames
+			return;
+		}
+
+		// Note(andiw): netty4 adds support for more efficient handling of lists messages in the
+		// pipeline itself.
+		// Instead of constructing a list of messages here, we could also just add the individual
+		// messages to the "out" list provided by netty. This would require changing all the handlers
+		// in the pipeline to accept "OFMessage" instead of "Iterable<OFMessage>". Probably
+		// a good idea, but left for a future cleanup.
+
+		OFMessage singleMessage = null;
+		List<OFMessage> list = null;
+		boolean first = true;
+		for (;;) {
+			OFMessage message = reader.readFrom(in);
+			if (message == null) {
+				break;
+			}
+			if (first) {
+				// first message read
+				singleMessage = message;
+				first = false;
+			} else {
+				// more messages read, use the list
+				if (list == null) {
+					list = new ArrayList<>();
+					list.add(singleMessage);
+					singleMessage = null;
+				}
+				list.add(message);
+			}
+		}
+		if (list != null) {
+			out.add(list);
+		} else if (singleMessage != null) {
+			out.add(Collections.singletonList(singleMessage));
+		}
+	}
 }

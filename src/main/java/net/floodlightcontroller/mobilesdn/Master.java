@@ -27,7 +27,6 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,22 +38,26 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import org.openflow.protocol.OFFlowMod;
-import org.openflow.protocol.OFMatch;
-import org.openflow.protocol.OFMessage;
-import org.openflow.protocol.OFPacketIn;
-import org.openflow.protocol.OFPacketOut;
-import org.openflow.protocol.OFPort;
-import org.openflow.protocol.OFStatisticsRequest;
-import org.openflow.protocol.OFType;
-import org.openflow.protocol.Wildcards;
-import org.openflow.protocol.Wildcards.Flag;
-import org.openflow.protocol.action.OFAction;
-import org.openflow.protocol.action.OFActionOutput;
-import org.openflow.protocol.statistics.OFFlowStatisticsReply;
-import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
-import org.openflow.protocol.statistics.OFStatistics;
-import org.openflow.protocol.statistics.OFStatisticsType;
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsReply;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPortDesc;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsRequest;
+import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFBufferId;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.TableId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,19 +65,20 @@ import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.core.IOFSwitch.PortChangeType;
 import net.floodlightcontroller.core.IOFSwitchListener;
-import net.floodlightcontroller.core.ImmutablePort;
+import net.floodlightcontroller.core.PortChangeType;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.mobilesdn.ClickManageServer;
 import net.floodlightcontroller.mobilesdn.web.SoftOffloadWebRoutable;
+import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.storage.IStorageSourceListener;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
-import net.floodlightcontroller.util.MACAddress;
+
 
 
 /**
@@ -154,6 +158,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
     protected IRestApiService restApi;
 
     private IFloodlightProviderService floodlightProvider;
+    protected static IOFSwitchService switchService;
+    
     private ScheduledExecutorService executor;
 
     // private NetworkManager networkManager;
@@ -283,7 +289,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         
         // ask APAgent to handle the info
         APAgent agent = apAgentMap.get(agentAddr.getHostAddress());
-        Client client = agent.receiveClientInfo(clientMac, clientIpAddr);
+        Client client = agent.receiveClientInfo(MacAddress.of(clientMac), IPv4Address.of(clientIpAddr));
 
         // record the initialised client object returned from APAgent
         if (!allClientMap.containsKey(clientMac) && client != null) {
@@ -364,7 +370,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         double r1 = Double.parseDouble(upRate);
         double r2 = Double.parseDouble(downRate);
-        Client clt = apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(clientEthAddr, r1, r2);
+        Client clt = apAgentMap.get(agentAddr.getHostAddress()).receiveClientRate(MacAddress.of(clientEthAddr), r1, r2);
         
         if (clt != null) { // update client info in the master
             allClientMap.put(clientEthAddr.toLowerCase(), clt);
@@ -375,7 +381,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
         log.debug("Received start timestamp for client downloading!");
         startTime = System.currentTimeMillis();
     }
-
+    //not in use in OFMonitor
+/*
     void switchQueueManagement(IOFSwitch sw, SwitchOutQueue swQueue) {
 
         List<OFStatistics> values = null;
@@ -465,61 +472,55 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.error("Failure retrieving flow statistics from switch " + sw, e);
         }
     }
-    
+*/    
     void agentTrafficManagement(IOFSwitch sw, APAgent agent) {
         
-        if (agent.getClientNum() > 1) {
-            log.info("Agent " + agent.getSSID() + " reach port download threshold!!!");
-            List<OFStatistics> values = null;
-            Future<List<OFStatistics>> future;
-            OFFlowStatisticsReply reply;
-            
-            OFStatisticsRequest req = new OFStatisticsRequest();
-            req.setStatisticType(OFStatisticsType.FLOW);
-            int requestLength = req.getLengthU();
-            OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-            OFMatch mPattern = new OFMatch();
-            mPattern.setWildcards(Wildcards.FULL);
-            specificReq.setMatch(mPattern);
-            specificReq.setTableId((byte)0xff);
-            
-            // using OFPort.OFPP_NONE(0xffff) as the outport
-            specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
-            req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-            requestLength += specificReq.getLength();
-            req.setLengthU(requestLength);
-            
-            try {
-                // make the query
-                future = sw.queryStatistics(req);
-                values = future.get(2, TimeUnit.SECONDS);
-
-                if (values != null) {
-                    Map<Client, Double> rateMap = new HashMap<Client, Double>();
-                    for (OFStatistics stat: values) {
-                        reply = (OFFlowStatisticsReply) stat;
-                        double rate = reply.getByteCount()
-                                      / ((double) reply.getDurationSeconds()
-                                      + ((double) reply.getDurationNanoseconds() / 1000000000));
-                        if (!reply.getActions().isEmpty() && rate > 0) {
-                            OFMatch match = reply.getMatch();
-                                    
-                            for (Client clt: agent.getAllClients()) {
-                                byte[] cltMac = clt.getMacAddress().toBytes();
-                                if (Arrays.equals(cltMac, match.getDataLayerDestination())) {
-                                    if (rateMap.containsKey(clt)) {
-                                        // FIXME this accumulation may result a wrong rate sum!!!
-                                        rateMap.put(clt, rateMap.get(clt) + rate);
-                                    } else {
-                                        rateMap.put(clt, rate);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // find offloading candidate
+    	if (agent.getClientNum() > 1) {
+    		log.info("Agent " + agent.getSSID() + " reach port download threshold!!!");
+    		
+    		Future<List<OFStatsReply>> future;
+        	List<OFStatsReply> values;
+        	
+        	Match.Builder matchBuilder = sw.getOFFactory().buildMatch();
+        	
+        	OFStatsRequest req = sw.getOFFactory().buildFlowStatsRequest()
+                    .setMatch(matchBuilder.build())
+                    .setTableId(TableId.ALL)
+                    .setOutPort(OFPort.NO_MASK)
+                    .build();
+        	
+        	   		
+		    try {
+		    	
+		    	future =  sw.writeStatsRequest(req); 
+				values = future.get(3, TimeUnit.SECONDS);
+				
+				if (values != null) {
+					Map<Client, Double> rateMap = new HashMap<Client, Double>();
+					for (OFStatsReply r : values) {
+		                OFFlowStatsReply psr = (OFFlowStatsReply) r;
+		                for (OFFlowStatsEntry pse : psr.getEntries()) {
+		                	double rate = pse.getByteCount().getValue()
+		                			/((double) pse.getDurationSec()
+		                		    +((double) pse.getDurationNsec() / 1000000000));
+		                	if (!pse.getActions().isEmpty() && rate > 0) {
+		                		Match match = pse.getMatch();
+		                		
+		                		 for (Client clt: agent.getAllClients()){
+		                			 if (clt.getMacAddress().equals(match.get(MatchField.ETH_DST))) {
+		                                    if (rateMap.containsKey(clt)) {
+		                                        // FIXME this accumulation may result a wrong rate sum!!!
+		                                        rateMap.put(clt, rateMap.get(clt) + rate);
+		                                    } else {
+		                                        rateMap.put(clt, rate);
+		                                    }
+		                                    break;
+		                                } 
+		                		 }		                		
+		                	}		                							                	
+		                }
+					}
+					// find offloading candidate
                     Client cltWithMaxRate = null;
                     double maxRate = 0;
                     for (Client clt: rateMap.keySet()) {
@@ -530,9 +531,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         }
                     }
                     
-                    // System.out.println(rateMap.toString());
-                    
-                    // send management data
+                 // send management data
                     if (cltWithMaxRate != null && !cltWithMaxRate.isBeningEvaluated()) {
                         byte[] message = makeByteMessageToClient(cltWithMaxRate.getMacAddress(), "c", "motion");
                         agent.send(message);
@@ -543,20 +542,21 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         log.info("Send message to agent " + agent.getSSID() 
                                 + " for collecting client motion and app info");
                     }
-                }
-            
-            } catch (Exception e) {
+                    
+                    
+					
+				}
+		    } catch (Exception e) {
                 log.error("Failure retrieving flow statistics from switch " + sw, e);
             }
-            
-        } else {
-            // nothing to do
-            return;
-        }
+    	}else {
+    		return;
+    	}
+       
     }
 
-    private byte[] makeByteMessageToClient(MACAddress mac, String signal, String data) {
-        byte[] m = mac.toBytes();
+    private byte[] makeByteMessageToClient(MacAddress mac, String signal, String data) {
+        byte[] m = mac.getBytes();
         byte[] b1 = signal.getBytes();
         byte[] b2 = (data + "|\n").getBytes();
 
@@ -583,7 +583,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
     void receiveCltAppInfo(String cltEthAddr, String app) {
         log.debug("Received app info from " + cltEthAddr + " - " + app);
-        MACAddress macAddr = MACAddress.valueOf(cltEthAddr);
+        MacAddress macAddr = MacAddress.of(cltEthAddr);
         Client clt = allClientMap.get(cltEthAddr);
 
 //        if (app.toLowerCase().equals("youtube") && clt != null) {
@@ -608,7 +608,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     void receiveScanResult(String[] fields) {
 
         log.info("Received scan result from " + fields[1]);
-        MACAddress macAddr = MACAddress.valueOf(fields[1]);
+        MacAddress macAddr = MacAddress.of(fields[1]);
         Client clt = allClientMap.get(macAddr.toString().toLowerCase());
         if (clt == null) {
             log.warn("Request from unknown client " + fields[1] + ", discard it...");
@@ -741,7 +741,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
                             // System.out.println(agent.toString());
                             IOFSwitch sw = clt.getSwitch();
-                            List<OFMatch> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
+                            List<Match> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
                             
                             byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
                                                     + agent.getSSID() + "|"
@@ -751,7 +751,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             
                             // change old OF flow entries
                             // this may not needed if candidate is connected to a different OFswitch
-                            changeOFFlowOutport(matchList, sw, agent.getOFPort());
+                            changeOFFlowOutport(matchList, sw, OFPort.of(agent.getOFPort()));
                             
                             log.info("Ask client (" + fields[1] + ") to switch to " + agent.getSSID());
 
@@ -776,73 +776,69 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
     
     
-    void changeOFFlowOutport(List<OFMatch> matchList, IOFSwitch sw, short outPort) {
-        OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
+    void changeOFFlowOutport(List<Match> matchList, IOFSwitch sw, OFPort outPort) {
+    	OFFlowMod.Builder fmb = sw.getOFFactory().buildFlowModifyStrict();
+    	fmb.setHardTimeout((short) 0)
+        .setIdleTimeout((short) 20)
+        .setBufferId(OFBufferId.NO_BUFFER);
+		
+		for (Match match: matchList) {
+			fmb.setMatch(match);
+	        fmb.setOutPort(outPort);
+	        
+	        ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+			OFActionOutput.Builder action = sw.getOFFactory().actions().buildOutput();
+	            
+	        action.setMaxLen(0xffff);
+		    action.setPort(outPort);
+		    actionList.add(action.build());
+				
+	        fmb.setActions(actionList);
+	            	            
+	        try {
+	            sw.write(fmb.build(), null);	             
+	        } catch (Exception e) {
+	            log.error("Failure to modify flow entries", e);
+	        }			 
+		 }
         
-        // this buffer_id is needed for avoiding a BAD_REQUEST error
-        flowMod.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-        flowMod.setHardTimeout((short) 0);
-        flowMod.setIdleTimeout((short) 20);
-        flowMod.setCommand(OFFlowMod.OFPFC_MODIFY_STRICT);
-        
-        for (OFMatch match: matchList) {
-            flowMod.setMatch(match);
-            flowMod.setOutPort(outPort);
-            flowMod.setActions(Arrays.asList((OFAction) new OFActionOutput(outPort, (short)0xffff)));
-            flowMod.setLength((short) (OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH));
-            
-            try {
-                sw.write(flowMod, null);
-                sw.flush();
-            } catch (IOException e) {
-                log.error("Tried to write flow_mod to {} but failed: {}",
-                            sw.getId(), e.getMessage());
-            } catch (Exception e) {
-                log.error("Failure to modify flow entries", e);
-            }
-        }
     }
     
     
-    List<OFMatch> findOFFlowEntryByDstMacAddr(IOFSwitch sw, MACAddress mac) {
+    List<Match> findOFFlowEntryByDstMacAddr(IOFSwitch sw, MacAddress mac) {
 
-        List<OFMatch> matchList = new ArrayList<OFMatch>();
-        List<OFStatistics> values = null;
-        Future<List<OFStatistics>> future;
-        OFFlowStatisticsReply reply;
-
-        OFStatisticsRequest req = new OFStatisticsRequest();
-        req.setStatisticType(OFStatisticsType.FLOW);
-        int requestLength = req.getLengthU();
-        OFFlowStatisticsRequest specificReq = new OFFlowStatisticsRequest();
-        OFMatch m = new OFMatch();
-        m.setWildcards(Wildcards.FULL.matchOn(Flag.DL_DST));
-        m.setDataLayerDestination(mac.toBytes());
-        specificReq.setMatch(m);
-        specificReq.setTableId((byte)0xff);
-
-        // using OFPort.OFPP_NONE(0xffff) as the outport
-        specificReq.setOutPort(OFPort.OFPP_NONE.getValue());
-        req.setStatistics(Collections.singletonList((OFStatistics) specificReq));
-        requestLength += specificReq.getLength();
-        req.setLengthU(requestLength);
-
-        try {
-            // make the query
-            future = sw.queryStatistics(req);
-            values = future.get(2, TimeUnit.SECONDS);
-            
-            if (values != null) {
-                for (OFStatistics stat: values) {
-                    // statsReply.add((OFFlowStatisticsReply) stat);
-
-                    reply = (OFFlowStatisticsReply) stat;
-                    matchList.add(reply.getMatch());
-                }
-            }
-        } catch (Exception e) {
+        List<Match> matchList = new ArrayList<Match>();
+        Future<List<OFStatsReply>> future;
+    	List<OFStatsReply> values;
+    	
+    	Match.Builder matchBuilder = sw.getOFFactory().buildMatch();
+    	matchBuilder.setExact(MatchField.ETH_DST, mac);
+    	
+    	OFStatsRequest req = sw.getOFFactory().buildFlowStatsRequest()
+                .setMatch(matchBuilder.build())
+                .setTableId(TableId.ALL)
+                .setOutPort(OFPort.NO_MASK)
+                .build();
+    	
+    	   		
+	    try {
+	    	
+	    	future =  sw.writeStatsRequest(req); 
+			values = future.get(2, TimeUnit.SECONDS);
+			
+			if (values != null) {
+				Map<Client, Double> rateMap = new HashMap<Client, Double>();
+				for (OFStatsReply r : values) {
+	                OFFlowStatsReply psr = (OFFlowStatsReply) r;
+	                for (OFFlowStatsEntry pse : psr.getEntries()) {
+	                	matchList.add(pse.getMatch());
+	                }
+				}
+			}
+	    } catch (Exception e) {
             log.error("Fail to retriev flow entry from switch " + sw.toString(), e);
         }
+        
         
         return matchList;
     }
@@ -875,12 +871,14 @@ public class Master implements IFloodlightModule, IFloodlightService,
             new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
         l.add(IRestApiService.class);
+        l.add(IOFSwitchService.class);
         return l;
     }
 
     @Override
     public void init(FloodlightModuleContext context) throws FloodlightModuleException {
         floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+        switchService = context.getServiceImpl(IOFSwitchService.class);
         restApi = context.getServiceImpl(IRestApiService.class);
         IThreadPoolService tp = context.getServiceImpl(IThreadPoolService.class);
         executor = tp.getScheduledExecutor();
@@ -890,7 +888,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public void startUp(FloodlightModuleContext context)
             throws FloodlightModuleException {
 
-        floodlightProvider.addOFSwitchListener(this);
+    	switchService.addOFSwitchListener(this);
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
         // read configure options
@@ -944,7 +942,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
         executor.execute(new ClickManageServer(this, port, executor));
 
         // Statistics
-        executor.execute(new OFMonitor(this.floodlightProvider, this, monitorInterval, monitorNum, swQueueList));
+        executor.execute(new OFMonitor(this.floodlightProvider,this.switchService, this, monitorInterval, monitorNum, swQueueList));
         executor.execute(new OFRateStatistics(this.floodlightProvider, this, monitorInterval));
         restApi.addRestletRoutable(new SoftOffloadWebRoutable());
     }
@@ -1232,11 +1230,13 @@ public class Master implements IFloodlightModule, IFloodlightService,
             IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 
         OFPacketIn pi = (OFPacketIn) msg;
-        // System.out.println(pi.toString());
-
-        OFMatch match = new OFMatch();
-        match.loadFromPacket(pi.getPacketData(), (short) 0);
-        MACAddress srcMacAddr = MACAddress.valueOf(match.getDataLayerSource());
+        
+        OFPort inPort =(pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort() : pi.getMatch().get(MatchField.IN_PORT));
+        
+        Match match = createMatchFromPacket(sw,inPort,cntx);
+        
+        MacAddress srcMacAddr = match.get(MatchField.ETH_SRC);
+        
         for (APAgent agent: apAgentMap.values()) {
             Client clt = agent.getClient(srcMacAddr.toString());
 
@@ -1252,27 +1252,43 @@ public class Master implements IFloodlightModule, IFloodlightService,
 
         return null;
     }
+    protected Match createMatchFromPacket(IOFSwitch sw, OFPort inPort, FloodlightContext cntx) {
+		// The packet in match will only contain the port number.
+		// We need to add in specifics for the hosts we're routing between.
+		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+		
+		MacAddress srcMac = eth.getSourceMACAddress();
+		MacAddress dstMac = eth.getDestinationMACAddress();
+
+		Match.Builder mb = sw.getOFFactory().buildMatch();
+		mb.setExact(MatchField.IN_PORT, inPort)
+		.setExact(MatchField.ETH_SRC, srcMac)
+		.setExact(MatchField.ETH_DST, dstMac);
+
+
+		return mb.build();
+	}
 
     @Override
-    public void switchAdded(long switchId) {
+    public void switchAdded(DatapathId switchId) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void switchRemoved(long switchId) {
+    public void switchRemoved(DatapathId switchId) {
         List<SwitchOutQueue> tempList = new LinkedList<SwitchOutQueue>();
 
         // remove corresponding agent
         for (String key: apAgentMap.keySet()) {
-        	if (apAgentMap.get(key).getSwitch().getId() == switchId) {
+        	if (apAgentMap.get(key).getSwitch().getId().equals(switchId)) {
         		apAgentMap.remove(key);
         	}
         }
         
         // remove sw from swQueseList
         for (SwitchOutQueue swqueue: swQueueList) {
-            if (swqueue.getSwId() == switchId) {
+            if (swqueue.getSwId().equals(switchId)) {
                 tempList.add(swqueue);
             }
         }
@@ -1283,8 +1299,8 @@ public class Master implements IFloodlightModule, IFloodlightService,
     }
 
     @Override
-    public void switchActivated(long switchId) {
-        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
+    public void switchActivated(DatapathId switchId) {
+        IOFSwitch sw = switchService.getActiveSwitch(switchId);
 
         InetSocketAddress swInetAddr = (InetSocketAddress) sw.getInetAddress();
         String swInetAddrStr = swInetAddr.getAddress().getHostAddress();
@@ -1301,6 +1317,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         APAgent agent = new APAgent(agentInetAddr, sw, 
                                                     apConfig.ssid, apConfig.bssid, 
                                                     apConfig.auth, apConfig.ofPort, apConfig.downlinkBW);
+                        
                         apAgentMap.put(agentInetAddr, agent);
                         agentList.add(agent);
                         log.info("Initialize AP " + apConfig.ssid + " (" + apConfig.bssid + ")");
@@ -1322,32 +1339,34 @@ public class Master implements IFloodlightModule, IFloodlightService,
             log.warn("Unrecording switch is connected and activated, ignore it!");
         }
     }
-
+    
     @Override
-    public void switchPortChanged(long switchId, ImmutablePort port,
-            PortChangeType type) {
-        // TODO Auto-generated method stub
+	public void rowsModified(String tableName, Set<Object> rowKeys) {
+		// TODO Auto-generated method stub
+		
+	}
 
-    }
+	@Override
+	public void rowsDeleted(String tableName, Set<Object> rowKeys) {
+		// TODO Auto-generated method stub
+		
+	}
 
-    @Override
-    public void switchChanged(long switchId) {
-        // TODO Auto-generated method stub
+	@Override
+	public void switchPortChanged(DatapathId switchId, OFPortDesc port,
+			PortChangeType type) {
+		// TODO Auto-generated method stub
+		
+	}
 
-    }
+	@Override
+	public void switchChanged(DatapathId switchId) {
+		// TODO Auto-generated method stub
+		
+	}
+   
 
-    @Override
-    public void rowsModified(String tableName, Set<Object> rowKeys) {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void rowsDeleted(String tableName, Set<Object> rowKeys) {
-        // TODO Auto-generated method stub
-
-    }
-
+    
     
     
     //********* REST API **********//
@@ -1366,6 +1385,12 @@ public class Master implements IFloodlightModule, IFloodlightService,
     public Client getClient(String clientMac) {
         return allClientMap.get(clientMac.toLowerCase());
     }
+
+	
+
+	
+
+	
     
 
 

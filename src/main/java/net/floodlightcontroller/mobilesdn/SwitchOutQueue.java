@@ -5,6 +5,8 @@ package net.floodlightcontroller.mobilesdn;
 
 import java.util.List;
 
+import org.projectfloodlight.openflow.types.DatapathId;
+
 /**
  * @author Yanhe Liu <yanhe.liu@cs.helsinki.fi>
  *
@@ -13,7 +15,7 @@ public class SwitchOutQueue implements Comparable<Object> {
     // public boolean isBytesUpdated = false;  // used by OFMonitor
     public double downRate;
 
-    private long swId;
+    private DatapathId swId;
     private int outPort;
     private int bandwidth;
     private long receiveBytes = 0;    // init value
@@ -23,14 +25,14 @@ public class SwitchOutQueue implements Comparable<Object> {
 
     private List<APAgent> apList;
 
-    public SwitchOutQueue(long id, int port, int w, List<APAgent> ap) {
+    public SwitchOutQueue(DatapathId id, int port, int w, List<APAgent> ap) {
         swId = id;
         outPort = port;
         bandwidth = w;
         apList = ap;
     }
 
-    public long getSwId() {
+    public DatapathId getSwId() {
         return swId;
     }
 
@@ -55,7 +57,7 @@ public class SwitchOutQueue implements Comparable<Object> {
         return apList;
     }
 
-    public void setSwId(long id) {
+    public void setSwId(DatapathId id) {
         swId = id;
     }
 

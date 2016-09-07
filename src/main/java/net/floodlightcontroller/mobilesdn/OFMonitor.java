@@ -17,36 +17,19 @@
 
 package net.floodlightcontroller.mobilesdn;
 
-import java.util.ArrayList;
-import java.io.IOException;
-import java.net.UnknownHostException;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.packet.Ethernet;
-
-import org.openflow.protocol.OFFlowMod;
-import org.openflow.protocol.OFMatch;
-import org.openflow.protocol.OFPacketOut;
-import org.openflow.protocol.OFPort;
-import org.openflow.protocol.OFStatisticsRequest;
-import org.openflow.protocol.OFType;
-import org.openflow.protocol.Wildcards;
-// import org.openflow.protocol.Wildcards.Flag;
-import org.openflow.protocol.action.OFAction;
-import org.openflow.protocol.statistics.OFFlowStatisticsReply;
-import org.openflow.protocol.statistics.OFFlowStatisticsRequest;
-import org.openflow.protocol.statistics.OFPortStatisticsReply;
-import org.openflow.protocol.statistics.OFPortStatisticsRequest;
-import org.openflow.protocol.statistics.OFStatistics;
-import org.openflow.protocol.statistics.OFStatisticsType;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
+import org.projectfloodlight.openflow.protocol.OFPortStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFPortStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsRequest;
+import org.projectfloodlight.openflow.types.OFPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +47,7 @@ public class OFMonitor implements Runnable {
     protected static Logger log = LoggerFactory.getLogger(OFMonitor.class);
 
     private IFloodlightProviderService floodlightProvider;
+    private IOFSwitchService switchService;
     private Master master;
 
     // private List<OFFlowStatisticsReply> statsReply;
@@ -86,9 +70,10 @@ public class OFMonitor implements Runnable {
         }
     }
 
-    public OFMonitor(IFloodlightProviderService fProvider, Master m,
+    public OFMonitor(IFloodlightProviderService fProvider, IOFSwitchService fSwitch,Master m,
             double detectInterval, int maxNum, List<SwitchOutQueue> swList) {
         this.floodlightProvider = fProvider;
+        this.switchService = fSwitch;
         this.master = m;
 
         this.timer = new Timer();
@@ -104,7 +89,8 @@ public class OFMonitor implements Runnable {
         timer.schedule(new OFMonitorTask(), (long)5000, (long)(this.interval*1000));
     }
 
-    private void portStatistics() {
+    //find that not in use
+    /*private void portStatistics() {
         List<OFStatistics> values = null;
         Future<List<OFStatistics>> future;
         OFPortStatisticsReply reply;
@@ -191,40 +177,39 @@ public class OFMonitor implements Runnable {
             }
         }
     }
+    */
     
     private void portStatisticsForEachAP() {
-        List<OFStatistics> values = null;
-        Future<List<OFStatistics>> future;
-        OFPortStatisticsReply reply;
+    	
+    	Future<List<OFStatsReply>> future;
+    	List<OFStatsReply> values;
+    	
+    	if ((master.getAllAPAgents()).isEmpty()) {
+            return;
+        }
 
-        for (APAgent agent: master.getAllAPAgents()) {
-            IOFSwitch sw = agent.getSwitch();
-
-            OFStatisticsRequest req = new OFStatisticsRequest();
-            req.setStatisticType(OFStatisticsType.PORT);
-            int requestLength = req.getLengthU();
-            OFPortStatisticsRequest specificReq = new OFPortStatisticsRequest();
-            specificReq.setPortNumber(agent.getOFPort());
-            req.setStatistics(Collections.singletonList((OFStatistics)specificReq));
-            requestLength += specificReq.getLength();
-            req.setLengthU(requestLength);
-
-            try {
-                // make the query
-                future = sw.queryStatistics(req);
-                values = future.get(3, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("Failure retrieving port statistics from switch " + sw, e);
-            }
-
-            if (values != null) {
-                
-                for (OFStatistics stat: values) {
-                    reply = (OFPortStatisticsReply) stat;
-
-                    long upBytes = reply.getReceiveBytes();
-                    long downBytes = reply.getTransmitBytes();
-
+    	for (APAgent agent : master.getAllAPAgents()) {
+    		IOFSwitch sw = agent.getSwitch();
+    		
+    		OFStatsRequest req = sw.getOFFactory().buildPortStatsRequest()
+                    .setPortNo(OFPort.of(agent.getOFPort()))
+                    .build();
+    		
+    		
+    	try {
+    		future =  sw.writeStatsRequest(req);    		
+		    values = future.get(3, TimeUnit.SECONDS);
+    	
+    	
+    	if (values != null) {
+			for (OFStatsReply r : values) {
+    		    OFPortStatsReply psr = (OFPortStatsReply) r;
+                  
+    			for (OFPortStatsEntry pse : psr.getEntries()) {
+    				//TODO 和port可以匹配么？
+    				long upBytes = pse.getTxBytes().getValue();//发出数据
+                    long downBytes = pse.getRxBytes().getValue();//接收数据
+                    
                     double downrate = (downBytes - agent.getOFDownBytes()) / (this.interval);
                     
                     if (downrate*8 >= RATE_THRESHOLD) {
@@ -263,23 +248,31 @@ public class OFMonitor implements Runnable {
                     agent.setOFDownBytes(downBytes);
                     agent.setOFUpBytes(upBytes);
                     agent.setOFDownRate(downrate);
-                }
-            }
-        }
+                   
+                	  
+                  }
+    		  }
+    	
+         }
+    	} catch (Exception e) {
+    		log.error("Failure retrieving port statistics from switch " + sw, e);
+    	}
+      }
     }
-
+   
+}
 
     /**
      * Get flow statistics from switch by using OFFlowStatisticsRequest
      *
      */
-
+    //find that not in use
     // FIXME: currently the OFFlowStatisticsRequest can only use IN_PORT,
     // DL_SRC, DL_DST and DL_VLAN_PCP to match flows, using other fields can
     // only get an empty stats reply. In addition, the match in the reply
     // only contains those four tuples
     // This might be a bug of Floodlight???
-
+/*
     private void flowStatistics() {
         // statsReply = new ArrayList<OFFlowStatisticsReply>();
         List<OFStatistics> values = null;
@@ -350,14 +343,15 @@ public class OFMonitor implements Runnable {
             }
         }
     }
-
+*/
     /**
      * Modify the action of open flow entries to drop
      *
      * @param match match info obtained from OFFlowStatisticsReply
      * @param sw corresponding OpenFlow switch
      */
-
+    //find that not in use
+/*
     private void setOFFlowActionToDrop(OFMatch match, IOFSwitch sw) throws UnknownHostException {
 
         OFFlowMod flowMod = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
@@ -389,5 +383,6 @@ public class OFMonitor implements Runnable {
             log.error("Failure to modify flow entries", e);
         }
     }
+*/
 
-}
+

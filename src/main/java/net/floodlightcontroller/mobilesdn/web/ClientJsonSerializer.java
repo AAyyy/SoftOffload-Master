@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 public class ClientJsonSerializer extends JsonSerializer<Client> {
 
     /**
-     * Handles serialization for Client
+     * Handles serialization for APAgent
      */
     @Override
     public void serialize(Client clt, JsonGenerator jGen,
@@ -30,7 +30,7 @@ public class ClientJsonSerializer extends JsonSerializer<Client> {
         jGen.writeStartObject();
         
         jGen.writeStringField("mac", clt.getMacAddress().toString());
-        jGen.writeStringField("ip", clt.getIpAddress().getHostAddress());
+        jGen.writeStringField("ip", clt.getIpAddress().toString());
         jGen.writeStringField("downrate", Double.toString(clt.getDownRate()));
         
         jGen.writeObjectFieldStart("agent");
@@ -44,7 +44,7 @@ public class ClientJsonSerializer extends JsonSerializer<Client> {
     
     
     /**
-     * Tells that we are the serializer for Client
+     * Tells SimpleModule that we are the serializer for APAgent
      */
     @Override
     public Class<Client> handledType() {

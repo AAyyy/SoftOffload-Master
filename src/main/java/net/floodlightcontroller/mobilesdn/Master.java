@@ -58,6 +58,7 @@ import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
+import org.projectfloodlight.openflow.util.ActionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -503,13 +504,15 @@ public class Master implements IFloodlightModule, IFloodlightService,
 		                	double rate = pse.getByteCount().getValue()
 		                			/((double) pse.getDurationSec()
 		                		    +((double) pse.getDurationNsec() / 1000000000));
-		                	if (!pse.getActions().isEmpty() && rate > 0) {
+		                	log.info("Test1.2agentTrafficManagement rate:"+rate);
+		                	if (!ActionUtils.getActions(pse).isEmpty() && rate > 0) {
 		                		Match match = pse.getMatch();
 		                		
 		                		 for (Client clt: agent.getAllClients()){
 		                			 if (clt.getMacAddress().equals(match.get(MatchField.ETH_DST))) {
 		                                    if (rateMap.containsKey(clt)) {
 		                                        // FIXME this accumulation may result a wrong rate sum!!!
+		                                    	log.info("Test1.2agentTrafficManagement cltinfo:"+clt.toString());
 		                                        rateMap.put(clt, rateMap.get(clt) + rate);
 		                                    } else {
 		                                        rateMap.put(clt, rate);
@@ -741,6 +744,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                         if (agent.getBSSID().toLowerCase().equals(candidateBSSID)) {
                             // System.out.println(agent.toString());
                             IOFSwitch sw = clt.getSwitch();
+                            log.info("Test1.2receiveScanResult:trigger findOFFlowEntryByDstMacAddr" );
                             List<Match> matchList = findOFFlowEntryByDstMacAddr(sw, clt.getMacAddress());
                             
                             byte[] msg = makeByteMessageToClient(macAddr, "c", "switch|"
@@ -751,6 +755,7 @@ public class Master implements IFloodlightModule, IFloodlightService,
                             
                             // change old OF flow entries
                             // this may not needed if candidate is connected to a different OFswitch
+                            log.info("Test1.2receiveScanResult:trigger changeOFFlowOutport" );
                             changeOFFlowOutport(matchList, sw, OFPort.of(agent.getOFPort()));
                             
                             log.info("Ask client (" + fields[1] + ") to switch to " + agent.getSSID());
@@ -796,7 +801,9 @@ public class Master implements IFloodlightModule, IFloodlightService,
 	        fmb.setActions(actionList);
 	            	            
 	        try {
-	            sw.write(fmb.build(), null);	             
+	        	OFFlowMod fm = fmb.build();
+	            sw.write(fm, null);
+	            log.info("Test1.2changeOFFlowOutport success write to switch the flowmod is"+fm.toString());
 	        } catch (Exception e) {
 	            log.error("Failure to modify flow entries", e);
 	        }			 
@@ -827,11 +834,12 @@ public class Master implements IFloodlightModule, IFloodlightService,
 			values = future.get(2, TimeUnit.SECONDS);
 			
 			if (values != null) {
-				Map<Client, Double> rateMap = new HashMap<Client, Double>();
+				
 				for (OFStatsReply r : values) {
 	                OFFlowStatsReply psr = (OFFlowStatsReply) r;
 	                for (OFFlowStatsEntry pse : psr.getEntries()) {
 	                	matchList.add(pse.getMatch());
+	                	log.info("Test1.2findOFFlowEntryByDstMacAddr the match is:"+pse.getMatch().toString());
 	                }
 				}
 			}

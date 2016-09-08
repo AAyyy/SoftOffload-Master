@@ -15,6 +15,7 @@ import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
+import org.projectfloodlight.openflow.util.ActionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,12 +87,20 @@ public class OFRateStatistics implements Runnable {
     		                
     		                for (OFFlowStatsEntry pse : psr.getEntries()) {
     		                	long byteCount = pse.getByteCount().getValue();
-    		                	if (!pse.getActions().isEmpty() && byteCount > 0) {
+    		                	log.info("Test1.2RateStatistics byteCount:"+byteCount);
+    		                	if (!ActionUtils.getActions(pse).isEmpty() && byteCount > 0) {
     	                            Match match = pse.getMatch();
-    	                            if (cltMac.equals(match.get(MatchField.ETH_DST))) {
+    	                            MacAddress dstMac = match.get(MatchField.ETH_DST);
+    	                            MacAddress srcMac = match.get(MatchField.ETH_SRC);
+    	                            if(dstMac!=null && srcMac!=null){
+    	                            	log.info("Test1.2RateStatistics clientMac:"+cltMac.toString()+"dstMac:"+dstMac.toString()+"srcMac:"+srcMac.toString());
+    	                            }
+    	                            if (cltMac.equals(dstMac)) {
+    	                            	log.info("Test1.2RateStatistics equal ETH_DST :"+cltMac.toString());
     	                            	cltDownByteSum += byteCount;
     	                                continue;
-    	                            } else if (cltMac.equals(match.get(MatchField.ETH_SRC))) {
+    	                            } else if (cltMac.equals(srcMac)) {
+    	                            	log.info("Test1.2RateStatistics equal ETH_SRC:"+cltMac.toString());
     	                            	cltUpByteSum += byteCount;
     	                            	continue;
     	                            }

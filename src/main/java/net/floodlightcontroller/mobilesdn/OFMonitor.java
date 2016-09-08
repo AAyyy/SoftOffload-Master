@@ -209,7 +209,7 @@ public class OFMonitor implements Runnable {
     				//TODO 和port可以匹配么？
     				long upBytes = pse.getTxBytes().getValue();//发出数据
                     long downBytes = pse.getRxBytes().getValue();//接收数据
-                    
+                    log.info("Test1.2portStatisticsForEachAP:agent" +agent.getBSSID()+ ":upBytes:"+upBytes+" downBytes:"+downBytes);
                     double downrate = (downBytes - agent.getOFDownBytes()) / (this.interval);
                     
                     if (downrate*8 >= RATE_THRESHOLD) {
@@ -238,6 +238,7 @@ public class OFMonitor implements Runnable {
 
                     if (agent.getDownRateOverNum() >= maxNum) {
                         // agent.setOffloadingFlag(true);
+                    	log.info("Test1.2portStatisticsForEachAP:next step trigger agentTrafficManagement");
                         master.agentTrafficManagement(sw, agent);
                         agent.setDownRateOverNum(0);
                         agent.setPendingNum(0);
